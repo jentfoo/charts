@@ -125,16 +125,25 @@ func measureTextMaxWidthHeight(textList []string, p *Painter) (int, int) {
 	return maxWidth, maxHeight
 }
 
-func reverseStringSlice(stringList []string) {
+// reverseSlice swaps the order of the slice so that the head and tail are reversed.
+func reverseSlice[T any](stringList []T) {
 	for i, j := 0, len(stringList)-1; i < j; i, j = i+1, j-1 {
 		stringList[i], stringList[j] = stringList[j], stringList[i]
 	}
 }
 
-func reverseIntSlice(intList []int) {
-	for i, j := 0, len(intList)-1; i < j; i, j = i+1, j-1 {
-		intList[i], intList[j] = intList[j], intList[i]
+// SliceToFloat64 converts a slice of arbitrary types to float64 to be used as chart values.
+func SliceToFloat64[T any](slice []T, conversion func(T) float64) []float64 {
+	result := make([]float64, len(slice))
+	for i, v := range slice {
+		result[i] = conversion(v)
 	}
+	return result
+}
+
+// IntSliceToFloat64 converts an int slice to a float64 slice so it can be used for chart values.
+func IntSliceToFloat64(slice []int) []float64 {
+	return SliceToFloat64(slice, func(i int) float64 { return float64(i) })
 }
 
 func parseFlexibleValue(value string, percentTotal float64) (float64, error) {

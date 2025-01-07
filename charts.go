@@ -255,7 +255,7 @@ func defaultRender(p *Painter, opt defaultRenderOption) (*defaultRenderResult, e
 			opt.XAxis.Data = r.Values()
 			opt.XAxis.isValueAxis = true
 		}
-		reverseStringSlice(yAxisOption.Data)
+		reverseSlice(yAxisOption.Data)
 		child := p.Child(PainterPaddingOption(Box{
 			Left:  rangeWidthLeft,
 			Right: rangeWidthRight,
