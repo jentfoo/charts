@@ -22,21 +22,33 @@ func NewRasterGraphicContext(img *image.RGBA) *RasterGraphicContext {
 	return NewRasterGraphicContextWithPainter(img, painter)
 }
 
-// NewRasterGraphicContextWithPainter creates a new Graphic context from an image and a Painter (see Freetype-go)
+// NewRasterGraphicContextWithPainter creates a new Graphic context from an image and a Painter (see Freetype-go).
 func NewRasterGraphicContextWithPainter(img draw.Image, painter Painter) *RasterGraphicContext {
 	width, height := img.Bounds().Dx(), img.Bounds().Dy()
 	return &RasterGraphicContext{
-		NewStackGraphicContext(),
-		img,
-		painter,
-		raster.NewRasterizer(width, height),
-		raster.NewRasterizer(width, height),
-		&truetype.GlyphBuf{},
-		DefaultDPI,
+		StackGraphicContext: NewStackGraphicContext(),
+		img:                 img,
+		painter:             painter,
+		fillRasterizer:      raster.NewRasterizer(width, height),
+		strokeRasterizer:    raster.NewRasterizer(width, height),
+		glyphBuf:            &truetype.GlyphBuf{},
+		dpi:                 DefaultDPI,
+		glyphCache:          make(map[glyphCacheKey]*glyphData),
 	}
 }
 
-// RasterGraphicContext is the implementation of GraphicContext for a raster image
+type glyphCacheKey struct {
+	font    *truetype.Font
+	scale   fixed.Int26_6
+	glyph   truetype.Index
+	hinting font.Hinting // TODO - keep?
+}
+
+type glyphData struct {
+	contours [][]truetype.Point // each contour is a slice of truetype.Point
+}
+
+// RasterGraphicContext is the implementation of GraphicContext for a raster image.
 type RasterGraphicContext struct {
 	*StackGraphicContext
 	img              draw.Image
@@ -45,6 +57,7 @@ type RasterGraphicContext struct {
 	strokeRasterizer *raster.Rasterizer
 	glyphBuf         *truetype.GlyphBuf
 	dpi              float64
+	glyphCache       map[glyphCacheKey]*glyphData
 }
 
 // SetDPI sets the screen resolution in dots per inch.
@@ -77,9 +90,8 @@ func (rgc *RasterGraphicContext) DrawImage(img image.Image) {
 }
 
 // FillString draws the text at point (0, 0)
-func (rgc *RasterGraphicContext) FillString(text string) (cursor float64, err error) {
-	cursor, err = rgc.FillStringAt(text, 0, 0)
-	return
+func (rgc *RasterGraphicContext) FillString(text string) (float64, error) {
+	return rgc.FillStringAt(text, 0, 0)
 }
 
 // FillStringAt draws the text at the specified point (x, y)
@@ -90,9 +102,8 @@ func (rgc *RasterGraphicContext) FillStringAt(text string, x, y float64) (cursor
 }
 
 // StrokeString draws the contour of the text at point (0, 0)
-func (rgc *RasterGraphicContext) StrokeString(text string) (cursor float64, err error) {
-	cursor, err = rgc.StrokeStringAt(text, 0, 0)
-	return
+func (rgc *RasterGraphicContext) StrokeString(text string) (float64, error) {
+	return rgc.StrokeStringAt(text, 0, 0)
 }
 
 // StrokeStringAt draws the contour of the text at point (x, y)
@@ -102,14 +113,44 @@ func (rgc *RasterGraphicContext) StrokeStringAt(text string, x, y float64) (curs
 	return
 }
 
+// drawGlyph fetches (or builds) the path for the given glyph at current scale
+// and adds it to rgc.current.Path at offset dx, dy.
 func (rgc *RasterGraphicContext) drawGlyph(glyph truetype.Index, dx, dy float64) error {
-	if err := rgc.glyphBuf.Load(rgc.current.Font, fixed.Int26_6(rgc.current.Scale), glyph, font.HintingNone); err != nil {
-		return err
+	scale := fixed.Int26_6(rgc.current.Scale)
+	hinting := font.HintingNone
+	key := glyphCacheKey{
+		font:    rgc.current.Font,
+		scale:   scale,
+		glyph:   glyph,
+		hinting: hinting,
 	}
-	e0 := 0
-	for _, e1 := range rgc.glyphBuf.Ends {
-		DrawContour(rgc, rgc.glyphBuf.Points[e0:e1], dx, dy)
-		e0 = e1
+
+	// Try to retrieve from cache
+	gd, ok := rgc.glyphCache[key]
+	if !ok {
+		// If not found in cache, load the glyph from the font
+		if err := rgc.glyphBuf.Load(rgc.current.Font, scale, glyph, hinting); err != nil {
+			return err
+		}
+		// Build the glyphData from glyphBuf
+		gd = &glyphData{}
+		e0 := 0
+		for _, e1 := range rgc.glyphBuf.Ends {
+			pts := rgc.glyphBuf.Points[e0:e1]
+			// Copy the points for this contour
+			contourCopy := make([]truetype.Point, len(pts))
+			copy(contourCopy, pts)
+			gd.contours = append(gd.contours, contourCopy)
+			e0 = e1
+		}
+		// Store in the cache
+		rgc.glyphCache[key] = gd
+	}
+
+	// Use your existing DrawContour to add each contour to the path,
+	// offset by dx, dy
+	for _, contour := range gd.contours {
+		DrawContour(rgc, contour, dx, dy)
 	}
 	return nil
 }
@@ -123,8 +164,7 @@ func (rgc *RasterGraphicContext) drawGlyph(glyph truetype.Index, dx, dy float64)
 func (rgc *RasterGraphicContext) CreateStringPath(s string, x, y float64) (cursor float64, err error) {
 	f := rgc.GetFont()
 	if f == nil {
-		err = errors.New("no font loaded, cannot continue")
-		return
+		return 0, errors.New("no font loaded, cannot continue")
 	}
 	rgc.recalc()
 
@@ -136,28 +176,25 @@ func (rgc *RasterGraphicContext) CreateStringPath(s string, x, y float64) (curso
 			x += fUnitsToFloat64(f.Kern(fixed.Int26_6(rgc.current.Scale), prev, index))
 		}
 		if err = rgc.drawGlyph(index, x, y); err != nil {
-			cursor = x - startx
-			return
+			// Return the offset so far if something fails
+			return x - startx, err
 		}
 		x += fUnitsToFloat64(f.HMetric(fixed.Int26_6(rgc.current.Scale), index).AdvanceWidth)
 		prev, hasPrev = index, true
 	}
-	cursor = x - startx
-	return
+	return x - startx, nil
 }
 
 // GetStringBounds returns the approximate pixel bounds of a string.
 func (rgc *RasterGraphicContext) GetStringBounds(s string) (left, top, right, bottom float64, err error) {
 	f := rgc.GetFont()
 	if f == nil {
-		err = errors.New("no font loaded, cannot continue")
-		return
+		return 0, 0, 0, 0, errors.New("no font loaded, cannot continue")
 	}
 	rgc.recalc()
 
 	left = math.MaxFloat64
 	top = math.MaxFloat64
-
 	cursor := 0.0
 	prev, hasPrev := truetype.Index(0), false
 	for _, rc := range s {
@@ -188,7 +225,11 @@ func (rgc *RasterGraphicContext) GetStringBounds(s string) (left, top, right, bo
 }
 
 // recalc recalculates scale and bounds values from the font size, screen
-// resolution and font metrics, and invalidates the glyph cache.
+// resolution and font metrics, and invalidates the glyph cache if needed.
+//
+// In this example we do NOT automatically invalidate the entire glyph cache,
+// because the cache key includes the scale. If you change the DPI/FontSize
+// frequently, you may want to flush or limit the cache.
 func (rgc *RasterGraphicContext) recalc() {
 	rgc.current.Scale = rgc.current.FontSizePoints * rgc.dpi
 }
@@ -209,8 +250,9 @@ func (rgc *RasterGraphicContext) SetFontSize(fontSizePoints float64) {
 	rgc.recalc()
 }
 
-func (rgc *RasterGraphicContext) paint(rasterizer *raster.Rasterizer, color color.Color) {
-	rgc.painter.SetColor(color)
+// paint applies the rasterizer to the image with the given color and resets path.
+func (rgc *RasterGraphicContext) paint(rasterizer *raster.Rasterizer, c color.Color) {
+	rgc.painter.SetColor(c)
 	rasterizer.Rasterize(rgc.painter)
 	rasterizer.Clear()
 	rgc.current.Path.Clear()
@@ -226,7 +268,10 @@ func (rgc *RasterGraphicContext) Stroke(paths ...*Path) {
 
 	rgc.strokeRasterizer.UseNonZeroWinding = true
 
-	stroker := NewLineStroker(rgc.current.Cap, rgc.current.Join, Transformer{Tr: rgc.current.Tr, Flattener: FtLineBuilder{Adder: rgc.strokeRasterizer}})
+	stroker := NewLineStroker(rgc.current.Cap, rgc.current.Join, Transformer{
+		Tr:        rgc.current.Tr,
+		Flattener: FtLineBuilder{Adder: rgc.strokeRasterizer},
+	})
 	stroker.HalfLineWidth = rgc.current.LineWidth / 2
 
 	var liner Flattener
@@ -298,7 +343,10 @@ func (rgc *RasterGraphicContext) Fill(paths ...*Path) {
 
 	rgc.fillRasterizer.UseNonZeroWinding = rgc.current.FillRule == FillRuleWinding
 
-	flattener := Transformer{Tr: rgc.current.Tr, Flattener: FtLineBuilder{Adder: rgc.fillRasterizer}}
+	flattener := Transformer{
+		Tr:        rgc.current.Tr,
+		Flattener: FtLineBuilder{Adder: rgc.fillRasterizer},
+	}
 	for _, p := range paths {
 		Flatten(p, flattener, rgc.current.Tr.GetScale())
 	}
@@ -323,9 +371,15 @@ func (rgc *RasterGraphicContext) FillStroke(paths ...*Path) {
 	rgc.fillRasterizer.UseNonZeroWinding = rgc.current.FillRule == FillRuleWinding
 	rgc.strokeRasterizer.UseNonZeroWinding = true
 
-	flattener := Transformer{Tr: rgc.current.Tr, Flattener: FtLineBuilder{Adder: rgc.fillRasterizer}}
+	flattener := Transformer{
+		Tr:        rgc.current.Tr,
+		Flattener: FtLineBuilder{Adder: rgc.fillRasterizer},
+	}
 
-	stroker := NewLineStroker(rgc.current.Cap, rgc.current.Join, Transformer{Tr: rgc.current.Tr, Flattener: FtLineBuilder{Adder: rgc.strokeRasterizer}})
+	stroker := NewLineStroker(rgc.current.Cap, rgc.current.Join, Transformer{
+		Tr:        rgc.current.Tr,
+		Flattener: FtLineBuilder{Adder: rgc.strokeRasterizer},
+	})
 	stroker.HalfLineWidth = rgc.current.LineWidth / 2
 
 	var liner Flattener
