@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/go-analyze/charts/chartdraw/roboto"
+	"github.com/golang/freetype/raster"
 	"github.com/golang/freetype/truetype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -226,4 +227,15 @@ func pathBounds(p *Path) (left, top, right, bottom float64) {
 		}
 	}
 	return
+}
+
+func TestNewRasterGraphicContextWithPainter(t *testing.T) {
+	t.Parallel()
+
+	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	p := raster.NewRGBAPainter(img)
+	rgc := NewRasterGraphicContextWithPainter(img, p)
+	if rgc.painter != p {
+		t.Fatalf("painter not set")
+	}
 }
