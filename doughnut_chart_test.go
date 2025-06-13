@@ -286,27 +286,43 @@ func TestClampAngleToSector(t *testing.T) {
 func TestConnectionPoint(t *testing.T) {
 	t.Parallel()
 
+	cases := []struct {
+		lx, ly  int
+		expectX int
+		expectY int
+	}{
+		{0, 10, 0, 5},
+		{5, 5, 3, 3},
+		{-10, 0, 0, 5},
+	}
+
 	s := sector{startAngle: 0, delta: math.Pi / 2}
-	x, y := s.connectionPoint(0, 0, 5, 0, 10)
-	assert.Equal(t, 0, x)
-	assert.Equal(t, 5, y)
-
-	x, y = s.connectionPoint(0, 0, 5, 5, 5)
-	assert.Equal(t, 3, x)
-	assert.Equal(t, 3, y)
-
-	x, y = s.connectionPoint(0, 0, 5, -10, 0)
-	assert.Equal(t, 0, x)
-	assert.Equal(t, 5, y)
+	for i, tt := range cases {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			x, y := s.connectionPoint(0, 0, 5, tt.lx, tt.ly)
+			assert.Equal(t, tt.expectX, x)
+			assert.Equal(t, tt.expectY, y)
+		})
+	}
 }
 
 func TestIsInsideCircle(t *testing.T) {
 	t.Parallel()
 
-	c := isInsideCircle(NewBox(-1, -1, 1, 1), 0, 0, 5)
-	assert.True(t, c)
-	c = isInsideCircle(NewBox(4, 4, 6, 6), 0, 0, 5)
-	assert.False(t, c)
+	cases := []struct {
+		b      Box
+		expect bool
+	}{
+		{NewBox(-1, -1, 1, 1), true},
+		{NewBox(4, 4, 6, 6), false},
+	}
+
+	for i, tt := range cases {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			c := isInsideCircle(tt.b, 0, 0, 5)
+			assert.Equal(t, tt.expect, c)
+		})
+	}
 }
 
 func TestClampInsideCircle(t *testing.T) {
@@ -331,43 +347,80 @@ func TestProjectBoxRadially(t *testing.T) {
 	t.Parallel()
 
 	b := NewBox(0, 0, 2, 2)
-	min, max := projectBoxRadially(b, 1, 0)
-	assert.InDelta(t, 0.0, min, 1e-6)
-	assert.InDelta(t, 2.0, max, 1e-6)
+	cases := []struct {
+		dx, dy    float64
+		expectMin float64
+		expectMax float64
+	}{
+		{1, 0, 0, 2},
+		{0, 1, 0, 2},
+	}
 
-	min, max = projectBoxRadially(b, 0, 1)
-	assert.InDelta(t, 0.0, min, 1e-6)
-	assert.InDelta(t, 2.0, max, 1e-6)
+	for i, tt := range cases {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			min, max := projectBoxRadially(b, tt.dx, tt.dy)
+			assert.InDelta(t, tt.expectMin, min, 1e-6)
+			assert.InDelta(t, tt.expectMax, max, 1e-6)
+		})
+	}
 }
 
 func TestShiftLabelHorizontallyTowardSector(t *testing.T) {
 	t.Parallel()
 
-	lp := &labelPlacement{box: NewBox(-2, -1, 0, 1)}
-	shiftLabelHorizontallyTowardSector(lp, 0, 0)
-	assert.Equal(t, NewBox(0, -1, 2, 1), lp.box)
+	cases := []struct {
+		box    Box
+		angle  float64
+		expect Box
+	}{
+		{NewBox(-2, -1, 0, 1), 0, NewBox(0, -1, 2, 1)},
+		{NewBox(2, -1, 4, 1), math.Pi, NewBox(-2, -1, 0, 1)},
+	}
 
-	lp = &labelPlacement{box: NewBox(2, -1, 4, 1)}
-	shiftLabelHorizontallyTowardSector(lp, 0, math.Pi)
-	assert.Equal(t, NewBox(-2, -1, 0, 1), lp.box)
+	for i, tt := range cases {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			lp := &labelPlacement{box: tt.box}
+			shiftLabelHorizontallyTowardSector(lp, 0, tt.angle)
+			assert.Equal(t, tt.expect, lp.box)
+		})
+	}
 }
 
 func TestAnyLabelCollision(t *testing.T) {
 	t.Parallel()
 
 	placed := []*labelPlacement{{box: NewBox(1, 1, 3, 3)}}
-	c := anyLabelCollision(NewBox(0, 0, 2, 2), placed)
-	assert.True(t, c)
-	c = anyLabelCollision(NewBox(3, 3, 5, 5), placed)
-	assert.False(t, c)
+	cases := []struct {
+		box    Box
+		expect bool
+	}{
+		{NewBox(0, 0, 2, 2), true},
+		{NewBox(3, 3, 5, 5), false},
+	}
+
+	for i, tt := range cases {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			c := anyLabelCollision(tt.box, placed)
+			assert.Equal(t, tt.expect, c)
+		})
+	}
 }
 
 func TestComputeLabelBox(t *testing.T) {
 	t.Parallel()
 
-	b := computeLabelBox(0, 0, 5, 0, NewBox(0, 0, 2, 2))
-	assert.Equal(t, NewBox(3, -2, 5, 0), b)
+	cases := []struct {
+		angle  float64
+		expect Box
+	}{
+		{0, NewBox(3, -2, 5, 0)},
+		{math.Pi, NewBox(-5, -2, -3, 0)},
+	}
 
-	b = computeLabelBox(0, 0, 5, math.Pi, NewBox(0, 0, 2, 2))
-	assert.Equal(t, NewBox(-5, -2, -3, 0), b)
+	for i, tt := range cases {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			b := computeLabelBox(0, 0, 5, tt.angle, NewBox(0, 0, 2, 2))
+			assert.Equal(t, tt.expect, b)
+		})
+	}
 }
