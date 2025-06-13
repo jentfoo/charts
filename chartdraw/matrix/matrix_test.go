@@ -236,6 +236,16 @@ func TestMatrixScaleRow(t *testing.T) {
 	assert.Equal(t, Vector([]float64{7, 8, 9}), m.Row(2))
 }
 
+func TestMatrixScaleAddRow(t *testing.T) {
+	t.Parallel()
+
+	m := NewFromArrays([][]float64{{1, 2, 3}, {4, 5, 6}})
+	m.scaleAddRow(1, 0, 2)
+
+	assert.Equal(t, Vector([]float64{1, 2, 3}), m.Row(0))
+	assert.Equal(t, Vector([]float64{6, 9, 12}), m.Row(1))
+}
+
 func TestMatrixCopy(t *testing.T) {
 	t.Parallel()
 
