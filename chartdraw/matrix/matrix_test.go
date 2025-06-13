@@ -623,3 +623,18 @@ func TestMatrixEye(t *testing.T) {
 		}
 	}
 }
+
+func TestMatrixZero(t *testing.T) {
+	t.Parallel()
+
+	m := Zero(2, 3)
+	rows, cols := m.Size()
+	assert.Equal(t, 2, rows)
+	assert.Equal(t, 3, cols)
+
+	for r := 0; r < 2; r++ {
+		for c := 0; c < 3; c++ {
+			assert.Zero(t, m.Get(r, c))
+		}
+	}
+}
