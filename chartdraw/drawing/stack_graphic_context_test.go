@@ -99,3 +99,68 @@ func TestStackFontRoundTrip(t *testing.T) {
 	assert.Equal(t, f, gc.GetFont())
 	assert.InDelta(t, 13.0, gc.GetFontSize(), 0.0001)
 }
+
+func TestStackScale(t *testing.T) {
+	t.Parallel()
+
+	gc := NewStackGraphicContext()
+	before := gc.GetMatrixTransform()
+	gc.Scale(2, 3)
+	after := gc.GetMatrixTransform()
+
+	assert.False(t, before.Equals(after))
+	sx, sy := after.GetScaling()
+	assert.InDelta(t, 2.0, sx, 0.0001)
+	assert.InDelta(t, 3.0, sy, 0.0001)
+}
+
+func TestStackSetFillRule(t *testing.T) {
+	t.Parallel()
+
+	gc := NewStackGraphicContext()
+	gc.SetFillRule(FillRuleWinding)
+	assert.Equal(t, FillRuleWinding, gc.current.FillRule)
+	gc.SetFillRule(FillRuleEvenOdd)
+	assert.Equal(t, FillRuleEvenOdd, gc.current.FillRule)
+}
+
+func TestStackBeginPathIsEmpty(t *testing.T) {
+	t.Parallel()
+
+	gc := NewStackGraphicContext()
+	gc.MoveTo(1, 1)
+	gc.LineTo(2, 2)
+	require.False(t, gc.IsEmpty())
+	gc.BeginPath()
+	assert.True(t, gc.IsEmpty())
+	assert.Empty(t, gc.current.Path.Points)
+}
+
+func TestStackPathCurvesAndClose(t *testing.T) {
+	t.Parallel()
+
+	gc := NewStackGraphicContext()
+	gc.QuadCurveTo(1, 1, 2, 2)
+	gc.CubicCurveTo(3, 3, 4, 4, 5, 5)
+	gc.ArcTo(0, 0, 1, 1, 0, math.Pi/2)
+	gc.Close()
+
+	expComp := []PathComponent{
+		MoveToComponent,
+		QuadCurveToComponent,
+		CubicCurveToComponent,
+		LineToComponent,
+		ArcToComponent,
+		CloseComponent,
+	}
+	assert.Equal(t, expComp, gc.current.Path.Components)
+
+	expPts := []float64{
+		0, 0,
+		1, 1, 2, 2,
+		3, 3, 4, 4, 5, 5,
+		1, 0,
+		0, 0, 1, 1, 0, math.Pi / 2,
+	}
+	assert.InDeltaSlice(t, expPts, gc.current.Path.Points, 0.0001)
+}
