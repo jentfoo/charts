@@ -91,3 +91,16 @@ func TestSegmentedPathPoints(t *testing.T) {
 	expect := []float64{0, 0, 1, 1, 2, 2, 3, 3}
 	assert.InDeltaSlice(t, expect, sp.Points, 0.0001)
 }
+
+func TestSegmentedPathEnd(t *testing.T) {
+	t.Parallel()
+
+	sp := &SegmentedPath{}
+	sp.MoveTo(1, 1)
+	sp.LineTo(2, 2)
+
+	expect := append([]float64(nil), sp.Points...)
+	sp.End()
+
+	assert.InDeltaSlice(t, expect, sp.Points, 0.0001)
+}
