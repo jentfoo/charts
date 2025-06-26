@@ -2,6 +2,8 @@ package chartdraw
 
 import (
 	"bytes"
+	"hash/crc32"
+	"image"
 	"image/png"
 	"math"
 	"testing"
@@ -39,4 +41,23 @@ func TestRasterRendererSavePNG(t *testing.T) {
 	img, err := png.Decode(bytes.NewReader(buf.Bytes()))
 	require.NoError(t, err)
 	assert.Equal(t, 10, img.Bounds().Dx())
+}
+
+func TestRasterRendererCircleHash(t *testing.T) {
+	t.Parallel()
+
+	rr := PNG(20, 20).(*rasterRenderer)
+	rr.MoveTo(3, 3)
+	rr.LineTo(4, 4)
+	rr.Circle(5, 10, 10)
+	rr.FillStroke()
+
+	iw := &ImageWriter{}
+	require.NoError(t, rr.Save(iw))
+	img, err := iw.Image()
+	require.NoError(t, err)
+	rgba := img.(*image.RGBA)
+
+	h := crc32.ChecksumIEEE(rgba.Pix)
+	assert.Equal(t, uint32(0xc5117d35), h)
 }
