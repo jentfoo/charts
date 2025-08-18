@@ -92,6 +92,12 @@ type ColorPalette interface {
 	WithTitleBorderColor(Color) ColorPalette
 	// WithLegendBorderColor returns a new ColorPalette with the specified legend border color.
 	WithLegendBorderColor(Color) ColorPalette
+	// GetUpColor returns the color for bullish (close > open) candles.
+	GetUpColor() Color
+	// GetDownColor returns the color for bearish (close < open) candles.
+	GetDownColor() Color
+	// GetCandleWickColor returns the color for the high-low wicks.
+	GetCandleWickColor() Color
 }
 
 type themeColorPalette struct {
@@ -111,6 +117,9 @@ type themeColorPalette struct {
 	legendBorderColor  Color
 	seriesColors       []Color
 	seriesTrendColors  []Color
+	upColor            Color
+	downColor          Color
+	candleWickColor    Color
 }
 
 func (t *themeColorPalette) GetTitleTextColor() Color {
@@ -135,6 +144,24 @@ func (t *themeColorPalette) GetXAxisTextColor() Color {
 
 func (t *themeColorPalette) GetYAxisTextColor() Color {
 	return t.yaxisTextColor
+}
+
+func (t *themeColorPalette) GetUpColor() Color {
+	if t.upColor.IsZero() {
+		return Color{R: 34, G: 197, B: 94, A: 255} // Green default
+	}
+	return t.upColor
+}
+
+func (t *themeColorPalette) GetDownColor() Color {
+	if t.downColor.IsZero() {
+		return Color{R: 239, G: 68, B: 68, A: 255} // Red default
+	}
+	return t.downColor
+}
+
+func (t *themeColorPalette) GetCandleWickColor() Color {
+	return t.candleWickColor
 }
 
 // ThemeOption defines color options for a theme.
@@ -173,6 +200,12 @@ type ThemeOption struct {
 	SeriesColors []Color
 	// SeriesTrendColors provides the palette for rendered trend lines.
 	SeriesTrendColors []Color
+	// UpColor is the color for bullish (close > open) candles. Default: green
+	UpColor Color
+	// DownColor is the color for bearish (close < open) candles. Default: red
+	DownColor Color
+	// CandleWickColor is the color for the high-low wicks. If not set, uses body color
+	CandleWickColor Color
 }
 
 var palettes = sync.Map{}
@@ -745,6 +778,9 @@ func makeColorPalette(o ThemeOption) *themeColorPalette {
 		yaxisTextColor:     o.TextColorYAxis,
 		seriesColors:       o.SeriesColors,
 		seriesTrendColors:  o.SeriesTrendColors,
+		upColor:            o.UpColor,
+		downColor:          o.DownColor,
+		candleWickColor:    o.CandleWickColor,
 	}
 }
 

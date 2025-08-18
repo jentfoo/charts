@@ -1288,6 +1288,48 @@ func filterSeriesList[T any](sl seriesList, chartType string) T {
 			}
 		}
 		return any(result).(T)
+	case ChartTypeCandlestick:
+		result := make(CandlestickSeriesList, 0, sl.len())
+		for i := 0; i < sl.len(); i++ {
+			s := sl.getSeries(i)
+			if chartTypeMatch(chartType, s.getType()) {
+				switch v := s.(type) {
+				case *CandlestickSeries:
+					result = append(result, *v)
+				case *GenericSeries:
+					// Convert GenericSeries to CandlestickSeries
+					// This should rarely happen as GenericSeries doesn't naturally contain OHLC data
+					// Create basic OHLC where O=H=L=C (flat line) from single values
+					ohlcData := make([]OHLCData, len(v.Values))
+					for j, val := range v.Values {
+						if val == GetNullValue() {
+							ohlcData[j] = OHLCData{
+								Open:  GetNullValue(),
+								High:  GetNullValue(),
+								Low:   GetNullValue(),
+								Close: GetNullValue(),
+							}
+						} else {
+							ohlcData[j] = OHLCData{
+								Open:  val,
+								High:  val,
+								Low:   val,
+								Close: val,
+							}
+						}
+					}
+					result = append(result, CandlestickSeries{
+						Data:       ohlcData,
+						YAxisIndex: v.YAxisIndex,
+						Label:      v.Label,
+						Name:       v.Name,
+						MarkLine:   v.MarkLine,
+						MarkPoint:  v.MarkPoint,
+					})
+				}
+			}
+		}
+		return any(result).(T)
 	default:
 		result := make(GenericSeriesList, 0, sl.len())
 		for i := 0; i < sl.len(); i++ {
@@ -1351,6 +1393,25 @@ func filterSeriesList[T any](sl seriesList, chartType string) T {
 						Values: []float64{v.Value},
 						Label:  v.Label,
 						Name:   v.Name,
+					})
+				case *CandlestickSeries:
+					// Use close prices for generic representation
+					closeValues := make([]float64, len(v.Data))
+					for j, ohlc := range v.Data {
+						if validateOHLCData(ohlc) {
+							closeValues[j] = ohlc.Close
+						} else {
+							closeValues[j] = GetNullValue()
+						}
+					}
+					result = append(result, GenericSeries{
+						Values:     closeValues,
+						YAxisIndex: v.YAxisIndex,
+						Label:      v.Label,
+						Name:       v.Name,
+						Type:       ChartTypeCandlestick,
+						MarkLine:   v.MarkLine,
+						MarkPoint:  v.MarkPoint,
 					})
 				case *GenericSeries:
 					result = append(result, *v)
@@ -1876,6 +1937,214 @@ func getSeriesMaxDataCount(sl seriesList) int {
 		count := sl.getSeriesLen(i)
 		if count > result {
 			result = count
+		}
+	}
+	return result
+}
+
+// OHLCData represents Open, High, Low, Close financial data for a single time period.
+type OHLCData struct {
+	Open  float64
+	High  float64
+	Low   float64
+	Close float64
+}
+
+const (
+	CandleStyleFilled      = "filled"      // Always filled bodies
+	CandleStyleTraditional = "traditional" // Hollow bullish, filled bearish
+	CandleStyleOutline     = "outline"     // Always outlined only
+)
+
+// CandlestickSeries references OHLC data for candlestick charts.
+type CandlestickSeries struct {
+	// Data provides OHLC data for each time period
+	Data []OHLCData
+	// YAxisIndex is the index for the axis, it must be 0 or 1.
+	YAxisIndex int
+	// Label provides the series labels.
+	Label SeriesLabel
+	// Name specifies a name for the series.
+	Name string
+	// MarkPoint provides a configuration for mark points for this series.
+	MarkPoint SeriesMarkPoint
+	// MarkLine provides a configuration for mark lines for this series.
+	MarkLine SeriesMarkLine
+	// CandleWidth specifies the width of each candlestick body as percentage of available space (0.0-1.0)
+	CandleWidth float64
+	// ShowWicks when false hides the high-low wicks (showing only the body)
+	ShowWicks *bool
+	// CandleStyle specifies the visual style: "filled", "traditional", "outline"
+	CandleStyle string
+}
+
+func (k *CandlestickSeries) getYAxisIndex() int {
+	return k.YAxisIndex
+}
+
+func (k *CandlestickSeries) getValues() []float64 {
+	// Flatten OHLC data for min/max calculations
+	result := make([]float64, 0, len(k.Data)*4)
+	for _, ohlc := range k.Data {
+		// Validate OHLC data: High >= max(Open,Close), Low <= min(Open,Close)
+		if validateOHLCData(ohlc) {
+			result = append(result, ohlc.Open, ohlc.High, ohlc.Low, ohlc.Close)
+		} else {
+			// Add null values for invalid data to maintain indexing
+			result = append(result, GetNullValue(), GetNullValue(), GetNullValue(), GetNullValue())
+		}
+	}
+	return result
+}
+
+func (k *CandlestickSeries) getType() string {
+	return ChartTypeCandlestick
+}
+
+func (k *CandlestickSeries) Summary() populationSummary {
+	return summarizePopulationData(k.getValues())
+}
+
+// validateOHLCData ensures OHLC data follows financial market rules
+func validateOHLCData(ohlc OHLCData) bool {
+	if ohlc.Open == GetNullValue() || ohlc.High == GetNullValue() ||
+		ohlc.Low == GetNullValue() || ohlc.Close == GetNullValue() {
+		return false
+	}
+	// High must be >= max(open, close), Low must be <= min(open, close)
+	return ohlc.High >= math.Max(ohlc.Open, ohlc.Close) &&
+		ohlc.Low <= math.Min(ohlc.Open, ohlc.Close)
+}
+
+type CandlestickSeriesList []CandlestickSeries
+
+func (k CandlestickSeriesList) names() []string {
+	return seriesNames(k)
+}
+
+func (k CandlestickSeriesList) len() int {
+	return len(k)
+}
+
+// SumSeries returns a float64 slice with the sum of each series (using close prices)
+func (k CandlestickSeriesList) SumSeries() []float64 {
+	return sumSeries(k)
+}
+
+func (k CandlestickSeriesList) getSeries(index int) series {
+	return &k[index]
+}
+
+func (k CandlestickSeriesList) getSeriesName(index int) string {
+	return k[index].Name
+}
+
+func (k CandlestickSeriesList) getSeriesValues(index int) []float64 {
+	return k[index].getValues()
+}
+
+func (k CandlestickSeriesList) getSeriesLen(index int) int {
+	return len(k[index].Data)
+}
+
+func (k CandlestickSeriesList) getSeriesSymbol(_ int) Symbol {
+	return SymbolSquare // Appropriate for candlesticks
+}
+
+func (k CandlestickSeriesList) hasMarkPoint() bool {
+	for _, s := range k {
+		if len(s.MarkPoint.Points) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (k CandlestickSeriesList) setSeriesName(index int, name string) {
+	k[index].Name = name
+}
+
+func (k CandlestickSeriesList) sortByNameIndex(dict map[string]int) {
+	sort.Slice(k, func(i, j int) bool {
+		return dict[k[i].Name] < dict[k[j].Name]
+	})
+}
+
+// SetSeriesLabels sets the label for all elements in the series.
+func (k CandlestickSeriesList) SetSeriesLabels(label SeriesLabel) {
+	for i := range k {
+		k[i].Label = label
+	}
+}
+
+func (k CandlestickSeriesList) ToGenericSeriesList() GenericSeriesList {
+	result := make([]GenericSeries, len(k))
+	for i, s := range k {
+		// Use close prices for generic representation
+		closeValues := make([]float64, len(s.Data))
+		for j, ohlc := range s.Data {
+			if validateOHLCData(ohlc) {
+				closeValues[j] = ohlc.Close
+			} else {
+				closeValues[j] = GetNullValue()
+			}
+		}
+		result[i] = GenericSeries{
+			Values:     closeValues,
+			YAxisIndex: s.YAxisIndex,
+			Label:      s.Label,
+			Name:       s.Name,
+			Type:       ChartTypeCandlestick,
+			MarkLine:   s.MarkLine,
+			MarkPoint:  s.MarkPoint,
+		}
+	}
+	return result
+}
+
+// CandlestickSeriesOption provides series customization
+type CandlestickSeriesOption struct {
+	Label       SeriesLabel
+	Names       []string
+	MarkPoint   SeriesMarkPoint
+	MarkLine    SeriesMarkLine
+	CandleWidth float64
+	CandleStyle string
+}
+
+// NewSeriesListCandlestick builds a SeriesList for candlestick charts from OHLC data.
+func NewSeriesListCandlestick(data [][]OHLCData, opts ...CandlestickSeriesOption) CandlestickSeriesList {
+	var opt CandlestickSeriesOption
+	if len(opts) != 0 {
+		opt = opts[0]
+	}
+
+	seriesList := make([]CandlestickSeries, len(data))
+	for index, ohlcData := range data {
+		s := CandlestickSeries{
+			Data:        ohlcData,
+			Label:       opt.Label,
+			MarkPoint:   opt.MarkPoint,
+			MarkLine:    opt.MarkLine,
+			CandleWidth: opt.CandleWidth,
+			CandleStyle: opt.CandleStyle,
+		}
+		if index < len(opt.Names) {
+			s.Name = opt.Names[index]
+		}
+		seriesList[index] = s
+	}
+	return seriesList
+}
+
+// ExtractClosePrices extracts close prices from OHLC data for use with indicators
+func ExtractClosePrices(series CandlestickSeries) []float64 {
+	result := make([]float64, len(series.Data))
+	for i, ohlc := range series.Data {
+		if validateOHLCData(ohlc) {
+			result[i] = ohlc.Close
+		} else {
+			result[i] = GetNullValue()
 		}
 	}
 	return result
