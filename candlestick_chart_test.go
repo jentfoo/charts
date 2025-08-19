@@ -131,6 +131,16 @@ func TestCandlestickChart(t *testing.T) {
 			},
 			expectedSVG: "",
 		},
+		{
+			name: "dual_axis",
+			makeOptions: func() CandlestickChartOption {
+				opt := makeBasicCandlestickChartOption()
+				opt.YAxis = append(opt.YAxis, YAxisOption{})
+				opt.Series.YAxisIndex = 1
+				return opt
+			},
+			expectedSVG: "",
+		},
 	}
 
 	for i, tt := range tests {
@@ -423,6 +433,60 @@ func TestCandlestickWithBollingerBands(t *testing.T) {
 		YAxis: make([]YAxisOption, 1),
 		Legend: LegendOption{
 			SeriesNames: []string{"BB Upper", "BB Middle", "BB Lower"},
+		},
+	}
+
+	painter, err := Render(chartOpt)
+	require.NoError(t, err)
+	data, err := painter.Bytes()
+	require.NoError(t, err)
+	assert.Greater(t, len(data), 100)
+}
+
+func TestCandlestickWithEMA(t *testing.T) {
+	t.Parallel()
+
+	ohlcData := makeBasicCandlestickData()
+	series := CandlestickSeries{Data: ohlcData}
+
+	emaLines := AddEMAToKlines(series, 3, Color{})
+
+	chartOpt := ChartOption{
+		SeriesList: emaLines.ToGenericSeriesList(),
+		Title:      TitleOption{Text: "EMA Line Chart"},
+		XAxis: XAxisOption{
+			Labels: []string{"Jan", "Feb", "Mar", "Apr", "May"},
+		},
+		YAxis: make([]YAxisOption, 1),
+		Legend: LegendOption{
+			SeriesNames: []string{"EMA(3)"},
+		},
+	}
+
+	painter, err := Render(chartOpt)
+	require.NoError(t, err)
+	data, err := painter.Bytes()
+	require.NoError(t, err)
+	assert.Greater(t, len(data), 100)
+}
+
+func TestCandlestickWithRSI(t *testing.T) {
+	t.Parallel()
+
+	ohlcData := makeBasicCandlestickData()
+	series := CandlestickSeries{Data: ohlcData}
+
+	rsiLines := AddRSIToKlines(series, 3)
+
+	chartOpt := ChartOption{
+		SeriesList: rsiLines.ToGenericSeriesList(),
+		Title:      TitleOption{Text: "RSI Line Chart"},
+		XAxis: XAxisOption{
+			Labels: []string{"Jan", "Feb", "Mar", "Apr", "May"},
+		},
+		YAxis: make([]YAxisOption, 1),
+		Legend: LegendOption{
+			SeriesNames: []string{"RSI(3)"},
 		},
 	}
 
