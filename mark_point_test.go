@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,4 +49,35 @@ func TestMarkPoint(t *testing.T) {
 			assertEqualSVG(t, tt.result, data)
 		})
 	}
+
+	t.Run("pattern", func(t *testing.T) {
+		p := NewPainter(PainterOptions{
+			OutputFormat: ChartOutputSVG,
+			Width:        600,
+			Height:       400,
+		}, PainterThemeOption(GetTheme(ThemeLight)))
+
+		index := 1
+		mp := newMarkPointPainter(p.Child(PainterPaddingOption(NewBoxEqual(20))))
+		mp.add(markPointRenderOption{
+			fillColor:    ColorBlack,
+			seriesValues: []float64{1, 2, 3},
+			markpoints: []SeriesMark{{
+				Type:        SeriesMarkTypePattern,
+				PatternType: PatternEngulfingBull,
+				Index:       &index,
+				Value:       "Bull"}},
+			points: []Point{
+				{X: 10, Y: 10},
+				{X: 30, Y: 30},
+				{X: 50, Y: 50},
+			},
+		})
+
+		_, err := mp.Render()
+		require.NoError(t, err)
+		data, err := p.Bytes()
+		require.NoError(t, err)
+		assert.Greater(t, len(data), 0)
+	})
 }

@@ -66,6 +66,71 @@ func TestCandlestickChart(t *testing.T) {
 			makeOptions: makeMinimalCandlestickChartOption,
 			expectedSVG: "",
 		},
+		{
+			name: "traditional",
+			makeOptions: func() CandlestickChartOption {
+				opt := makeBasicCandlestickChartOption()
+				opt.Series.CandleStyle = CandleStyleTraditional
+				return opt
+			},
+			expectedSVG: "",
+		},
+		{
+			name: "outline",
+			makeOptions: func() CandlestickChartOption {
+				opt := makeBasicCandlestickChartOption()
+				opt.Series.CandleStyle = CandleStyleOutline
+				return opt
+			},
+			expectedSVG: "",
+		},
+		{
+			name: "no_wicks",
+			makeOptions: func() CandlestickChartOption {
+				opt := makeBasicCandlestickChartOption()
+				opt.Series.ShowWicks = Ptr(false)
+				return opt
+			},
+			expectedSVG: "",
+		},
+		{
+			name: "custom_style",
+			makeOptions: func() CandlestickChartOption {
+				opt := makeBasicCandlestickChartOption()
+				opt.CandleWidth = 0.5
+				opt.WickWidth = 2.0
+				opt.UpColor = ColorGreen
+				opt.DownColor = ColorRed
+				return opt
+			},
+			expectedSVG: "",
+		},
+		{
+			name: "marks",
+			makeOptions: func() CandlestickChartOption {
+				opt := makeBasicCandlestickChartOption()
+				opt.Series.Label.Show = Ptr(true)
+				opt.Series.MarkLine = NewMarkLine("min", "max")
+				opt.Series.MarkLine.ValueFormatter = func(f float64) string { return fmt.Sprintf("%.2f", f) }
+				opt.Series.MarkPoint = NewMarkPoint("min", "max")
+				opt.Series.MarkPoint.ValueFormatter = func(f float64) string { return fmt.Sprintf("%.2f", f) }
+				return opt
+			},
+			expectedSVG: "",
+		},
+		{
+			name: "doji",
+			makeOptions: func() CandlestickChartOption {
+				opt := makeBasicCandlestickChartOption()
+				data := makeBasicCandlestickData()
+				if len(data) > 0 {
+					data[0] = OHLCData{Open: 100, High: 110, Low: 95, Close: 100}
+				}
+				opt.Series = NewSeriesCandlestick(data)
+				return opt
+			},
+			expectedSVG: "",
+		},
 	}
 
 	for i, tt := range tests {
@@ -535,4 +600,39 @@ func TestCandlestickLargeDataset(t *testing.T) {
 	data2, err := p.Bytes()
 	require.NoError(t, err)
 	assert.Greater(t, len(data2), 100)
+}
+
+func TestRenderCandlestickChart(t *testing.T) {
+	t.Parallel()
+
+	opt := ChartOption{
+		SeriesList: NewSeriesCandlestick(makeBasicCandlestickData()).ToGenericSeriesList(),
+		Title:      TitleOption{Text: "Price"},
+		XAxis: XAxisOption{
+			Labels: []string{"Jan", "Feb", "Mar", "Apr", "May"},
+		},
+		YAxis:  make([]YAxisOption, 1),
+		Legend: LegendOption{SeriesNames: []string{"Price"}},
+	}
+
+	painter, err := Render(opt, SVGOutputOptionFunc())
+	require.NoError(t, err)
+	data, err := painter.Bytes()
+	require.NoError(t, err)
+	assert.Greater(t, len(data), 100)
+}
+
+func TestRenderCandlestickMixError(t *testing.T) {
+	t.Parallel()
+
+	candlesticks := NewSeriesCandlestick(makeBasicCandlestickData()).ToGenericSeriesList()
+	line := NewSeriesListLine([][]float64{{1, 2, 3, 4, 5}}).ToGenericSeriesList()
+
+	opt := ChartOption{
+		SeriesList: append(candlesticks, line...),
+	}
+
+	_, err := Render(opt)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "candlestick can not mix other charts")
 }
