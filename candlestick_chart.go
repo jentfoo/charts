@@ -148,6 +148,9 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 		openY := yRange.getRestHeight(ohlc.Open)
 		closeY := yRange.getRestHeight(ohlc.Close)
 
+		bodyTop := int(math.Min(float64(openY), float64(closeY)))
+		bodyBottom := int(math.Max(float64(openY), float64(closeY)))
+
 		// Determine colors and style
 		isBullish := ohlc.Close >= ohlc.Open
 		candleStyle := series.CandleStyle
@@ -173,25 +176,32 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 			if wickWidth <= 0 {
 				wickWidth = 1.0 // Default wick width
 			}
-			
-			// Draw main vertical wick line
-			seriesPainter.LineStroke([]Point{
-				{X: centerX, Y: highY},
-				{X: centerX, Y: lowY},
-			}, wickColor, wickWidth)
-			
+
+			if highY < bodyTop {
+				seriesPainter.LineStroke([]Point{
+					{X: centerX, Y: highY},
+					{X: centerX, Y: bodyTop},
+				}, wickColor, wickWidth)
+			}
+			if lowY > bodyBottom {
+				seriesPainter.LineStroke([]Point{
+					{X: centerX, Y: bodyBottom},
+					{X: centerX, Y: lowY},
+				}, wickColor, wickWidth)
+			}
+
 			// Calculate cap width (half the candle width)
 			capWidth := candleWidth / 4 // 1/4 of candle width on each side
 			if capWidth < 1 {
 				capWidth = 1 // Minimum cap width
 			}
-			
+
 			// Draw horizontal cap at high point
 			seriesPainter.LineStroke([]Point{
 				{X: centerX - capWidth, Y: highY},
 				{X: centerX + capWidth, Y: highY},
 			}, wickColor, wickWidth)
-			
+
 			// Draw horizontal cap at low point
 			seriesPainter.LineStroke([]Point{
 				{X: centerX - capWidth, Y: lowY},
@@ -200,8 +210,6 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 		}
 
 		// Draw open-close body based on style
-		bodyTop := int(math.Min(float64(openY), float64(closeY)))
-		bodyBottom := int(math.Max(float64(openY), float64(closeY)))
 
 		if bodyTop == bodyBottom { // Doji (open == close)
 			// Draw thin line instead of rectangle
