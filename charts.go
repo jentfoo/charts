@@ -354,7 +354,7 @@ func Render(opt ChartOption, opts ...OptionFunc) (*Painter, error) {
 	doughnutSeriesList := filterSeriesList[DoughnutSeriesList](opt.SeriesList, ChartTypeDoughnut)
 	radarSeriesList := filterSeriesList[RadarSeriesList](opt.SeriesList, ChartTypeRadar)
 	funnelSeriesList := filterSeriesList[FunnelSeriesList](opt.SeriesList, ChartTypeFunnel)
-	candlestickSeriesList := filterSeriesList[CandlestickSeriesList](opt.SeriesList, ChartTypeCandlestick)
+	candlestickSeries := filterSeriesList[[]CandlestickSeries](opt.SeriesList, ChartTypeCandlestick)
 
 	seriesCount := len(seriesList)
 	if len(horizontalBarSeriesList) != 0 && len(horizontalBarSeriesList) != seriesCount {
@@ -367,7 +367,7 @@ func Render(opt ChartOption, opts ...OptionFunc) (*Painter, error) {
 		return nil, errors.New("radar can not mix other charts")
 	} else if len(funnelSeriesList) != 0 && len(funnelSeriesList) != seriesCount {
 		return nil, errors.New("funnel can not mix other charts")
-	} else if len(candlestickSeriesList) != 0 && len(candlestickSeriesList) != seriesCount {
+	} else if len(candlestickSeries) != 0 && len(candlestickSeries) != seriesCount {
 		return nil, errors.New("candlestick can not mix other charts")
 	}
 
@@ -540,14 +540,15 @@ func Render(opt ChartOption, opts ...OptionFunc) (*Painter, error) {
 	}
 
 	// candlestick chart
-	if len(candlestickSeriesList) != 0 {
+	if len(candlestickSeries) != 0 {
 		handler.Add(func() error {
+			// For now, take first candlestick series (single-series design)
+			firstSeries := candlestickSeries[0]
 			_, err := newCandlestickChart(p, CandlestickChartOption{
 				Theme:          opt.Theme,
-				Font:           opt.Font,
 				XAxis:          opt.XAxis,
 				YAxis:          opt.YAxis,
-				SeriesList:     candlestickSeriesList,
+				Series:         firstSeries,
 				CandleWidth:    0.8, // Could be configurable in ChartOption
 				WickWidth:      1.0,
 				ValueFormatter: opt.ValueFormatter,

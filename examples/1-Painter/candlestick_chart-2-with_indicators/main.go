@@ -42,7 +42,7 @@ func main() {
 
 	// Create mixed chart using generic chart option
 	seriesList := append(
-		charts.NewSeriesListCandlestick([][]charts.OHLCData{ohlcData}).ToGenericSeriesList(),
+		charts.NewSeriesCandlestick(ohlcData).ToGenericSeriesList(),
 		charts.NewSeriesListLine([][]float64{sma10, sma20, ema10}).ToGenericSeriesList()...,
 	)
 

@@ -32,7 +32,7 @@ func makeBasicCandlestickChartOption() CandlestickChartOption {
 		Legend: LegendOption{
 			SeriesNames: []string{"Price"},
 		},
-		SeriesList: NewSeriesListCandlestick([][]OHLCData{makeBasicCandlestickData()}),
+		Series: NewSeriesCandlestick(makeBasicCandlestickData()),
 	}
 }
 
@@ -43,8 +43,8 @@ func makeMinimalCandlestickChartOption() CandlestickChartOption {
 			Labels: []string{"1", "2", "3", "4", "5"},
 			Show:   Ptr(false),
 		},
-		YAxis:      make([]YAxisOption, 1),
-		SeriesList: NewSeriesListCandlestick([][]OHLCData{makeBasicCandlestickData()}),
+		YAxis:  make([]YAxisOption, 1),
+		Series: NewSeriesCandlestick(makeBasicCandlestickData()),
 	}
 }
 
@@ -98,9 +98,9 @@ func TestCandlestickChartError(t *testing.T) {
 		{
 			name: "empty_series",
 			makeOptions: func() CandlestickChartOption {
-				return NewCandlestickChartOptionWithSeries(CandlestickSeriesList{})
+				return NewCandlestickChartOptionWithSeries(CandlestickSeries{})
 			},
-			errorMsgContains: "empty series list",
+			errorMsgContains: "empty series data",
 		},
 	}
 
@@ -172,17 +172,16 @@ func TestCandlestickSeriesListMethods(t *testing.T) {
 	t.Parallel()
 
 	data := makeBasicCandlestickData()
-	seriesList := NewSeriesListCandlestick([][]OHLCData{data}, CandlestickSeriesOption{
-		Names: []string{"Test Series"},
-	})
+	series := NewSeriesCandlestick(data)
+	series.Name = "Test Series"
 
-	assert.Equal(t, 1, seriesList.len())
-	assert.Equal(t, "Test Series", seriesList.getSeriesName(0))
-	assert.Equal(t, len(data), seriesList.getSeriesLen(0))
-	assert.Equal(t, string(SymbolSquare), string(seriesList.getSeriesSymbol(0)))
+	assert.Equal(t, 1, series.len())
+	assert.Equal(t, "Test Series", series.names()[0])
+	assert.Equal(t, len(data), len(series.Data))
+	assert.Equal(t, string(SymbolSquare), string(series.getSeriesSymbol(0)))
 
 	// Test ToGenericSeriesList
-	genericList := seriesList.ToGenericSeriesList()
+	genericList := series.ToGenericSeriesList()
 	assert.Len(t, genericList, 1)
 	assert.Equal(t, ChartTypeCandlestick, genericList[0].Type)
 	assert.Equal(t, len(data), len(genericList[0].Values))
@@ -223,7 +222,7 @@ func TestCandlestickStyles(t *testing.T) {
 	for i, tc := range tests {
 		t.Run(strconv.Itoa(i)+"-"+tc.style, func(t *testing.T) {
 			opt := makeBasicCandlestickChartOption()
-			opt.SeriesList[0].CandleStyle = tc.style
+			opt.Series.CandleStyle = tc.style
 
 			painterOptions := PainterOptions{
 				OutputFormat: ChartOutputSVG,
@@ -270,8 +269,8 @@ func TestCandlestickWithPatterns(t *testing.T) {
 		XAxis: XAxisOption{
 			Labels: []string{"1", "2", "3", "4", "5"},
 		},
-		YAxis:      make([]YAxisOption, 1),
-		SeriesList: CandlestickSeriesList{series},
+		YAxis:  make([]YAxisOption, 1),
+		Series: series,
 	}
 
 	painterOptions := PainterOptions{
@@ -391,8 +390,8 @@ func TestCandlestickWithMarkLines(t *testing.T) {
 		XAxis: XAxisOption{
 			Labels: []string{"Jan", "Feb", "Mar", "Apr", "May"},
 		},
-		YAxis:      make([]YAxisOption, 1),
-		SeriesList: CandlestickSeriesList{series},
+		YAxis:  make([]YAxisOption, 1),
+		Series: series,
 	}
 
 	painterOptions := PainterOptions{
@@ -445,8 +444,8 @@ func TestCandlestickAggregation(t *testing.T) {
 		XAxis: XAxisOption{
 			Labels: []string{"Period 1", "Period 2", "Period 3"},
 		},
-		YAxis:      make([]YAxisOption, 1),
-		SeriesList: CandlestickSeriesList{aggregated},
+		YAxis:  make([]YAxisOption, 1),
+		Series: aggregated,
 	}
 
 	painterOptions := PainterOptions{
@@ -520,8 +519,8 @@ func TestCandlestickLargeDataset(t *testing.T) {
 		XAxis: XAxisOption{
 			Show: Ptr(false), // Hide labels for large dataset
 		},
-		YAxis:      make([]YAxisOption, 1),
-		SeriesList: NewSeriesListCandlestick([][]OHLCData{data}),
+		YAxis:  make([]YAxisOption, 1),
+		Series: NewSeriesCandlestick(data),
 	}
 
 	painterOptions := PainterOptions{

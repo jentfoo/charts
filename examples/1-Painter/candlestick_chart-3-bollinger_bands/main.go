@@ -40,7 +40,7 @@ func main() {
 
 	// Create mixed chart
 	seriesList := append(
-		charts.NewSeriesListCandlestick([][]charts.OHLCData{ohlcData}).ToGenericSeriesList(),
+		charts.NewSeriesCandlestick(ohlcData).ToGenericSeriesList(),
 		charts.NewSeriesListLine([][]float64{bands.Upper, bands.Middle, bands.Lower}).ToGenericSeriesList()...,
 	)
 

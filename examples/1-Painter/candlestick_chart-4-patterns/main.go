@@ -79,7 +79,7 @@ func main() {
 			SeriesNames: []string{"Price with Patterns"},
 			Show:        charts.Ptr(true),
 		},
-		SeriesList: charts.CandlestickSeriesList{series},
+		Series: series,
 		Padding:    charts.NewBoxEqual(20),
 	}
 

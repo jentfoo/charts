@@ -38,9 +38,11 @@ func main() {
 	fiveMinuteSeries := charts.AggregateCandlestick(minuteSeries, 5)
 
 	// Create combined chart showing both timeframes
+	minuteCandlestickSeries := charts.NewSeriesCandlestick(minuteData)
+	fiveMinuteCandlestickSeries := charts.NewSeriesCandlestick(fiveMinuteSeries.Data)
 	seriesList := append(
-		charts.NewSeriesListCandlestick([][]charts.OHLCData{minuteData}).ToGenericSeriesList(),
-		charts.NewSeriesListCandlestick([][]charts.OHLCData{fiveMinuteSeries.Data}).ToGenericSeriesList()...,
+		minuteCandlestickSeries.ToGenericSeriesList(),
+		fiveMinuteCandlestickSeries.ToGenericSeriesList()...,
 	)
 
 	// Render the chart

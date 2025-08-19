@@ -20,7 +20,8 @@ func main() {
 	}
 
 	// Convert to generic series list for use with ChartOption
-	seriesList := charts.NewSeriesListCandlestick([][]charts.OHLCData{ohlcData}).ToGenericSeriesList()
+	candlestickSeries := charts.NewSeriesCandlestick(ohlcData)
+	seriesList := candlestickSeries.ToGenericSeriesList()
 
 	// Create chart using ChartOption and OptionFunc pattern
 	painter, err := charts.Render(charts.ChartOption{

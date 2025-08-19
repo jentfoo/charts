@@ -49,7 +49,7 @@ func main() {
 	}
 
 	// Set candle style to traditional (hollow bullish, filled bearish)
-	opt.SeriesList[0].CandleStyle = charts.CandleStyleTraditional
+	opt.Series.CandleStyle = charts.CandleStyleTraditional
 
 	// Configure padding for better appearance
 	opt.Padding = charts.NewBoxEqual(20)
