@@ -64,11 +64,38 @@ func (m *markPointPainter) Render() (Box, error) {
 			textStyle.FontSize = defaultLabelFontSize
 			index := summary.MinIndex
 			value := summary.Min
+			text := opt.valueFormatter(value)
+
 			switch markPointData.Type {
 			case SeriesMarkTypeMax:
 				index = summary.MaxIndex
 				value = summary.Max
+				text = opt.valueFormatter(value)
+			case SeriesMarkTypePattern:
+				// For pattern marks, use the specific index and pattern value
+				if markPointData.Index != nil {
+					index = *markPointData.Index
+					if index >= len(opt.points) {
+						continue // skip invalid index
+					}
+
+					// Use pattern name as value if available
+					if markPointData.Value != nil {
+						if str, ok := markPointData.Value.(string); ok {
+							text = str
+						}
+					} else {
+						text = markPointData.PatternType
+					}
+				} else {
+					continue // pattern marks require an index
+				}
 			}
+
+			if index >= len(opt.points) {
+				continue // skip invalid index
+			}
+
 			p := opt.points[index]
 			if opt.seriesLabelPainter != nil {
 				// the series label has been replaced by our MarkPoint
@@ -76,8 +103,20 @@ func (m *markPointPainter) Render() (Box, error) {
 				opt.seriesLabelPainter.values[index].Text = ""
 			}
 
-			painter.Pin(p.X, p.Y-opt.symbolSize>>1, opt.symbolSize, opt.fillColor, opt.fillColor, 0.0)
-			text := opt.valueFormatter(value)
+			// Use different colors for bullish vs bearish patterns
+			fillColor := opt.fillColor
+			if markPointData.Type == SeriesMarkTypePattern {
+				switch markPointData.PatternType {
+				case PatternEngulfingBull, PatternHammer:
+					fillColor = Color{R: 34, G: 197, B: 94, A: 255} // Green
+				case PatternEngulfingBear, PatternShootingStar:
+					fillColor = Color{R: 239, G: 68, B: 68, A: 255} // Red
+				case PatternDoji, PatternGravestone, PatternDragonfly:
+					fillColor = Color{R: 255, G: 193, B: 7, A: 255} // Yellow/Orange
+				}
+			}
+
+			painter.Pin(p.X, p.Y-opt.symbolSize>>1, opt.symbolSize, fillColor, fillColor, 0.0)
 			textBox := painter.MeasureText(text, 0, textStyle)
 			if textStyle.FontSize > smallLabelFontSize && textBox.Width() > opt.symbolSize {
 				textStyle.FontSize = smallLabelFontSize

@@ -1,6 +1,7 @@
 package charts
 
 import (
+	"fmt"
 	"strconv"
 	"testing"
 
@@ -53,22 +54,22 @@ func TestCandlestickChart(t *testing.T) {
 	tests := []struct {
 		name        string
 		makeOptions func() CandlestickChartOption
+		expectedSVG string
 	}{
 		{
 			name:        "basic",
 			makeOptions: makeBasicCandlestickChartOption,
+			expectedSVG: "",
 		},
 		{
 			name:        "minimal",
 			makeOptions: makeMinimalCandlestickChartOption,
+			expectedSVG: "",
 		},
 	}
 
 	for i, tt := range tests {
-		tt := tt // capture loop variable
 		t.Run(strconv.Itoa(i)+"-"+tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			painterOptions := PainterOptions{
 				OutputFormat: ChartOutputSVG,
 				Width:        600,
@@ -81,7 +82,7 @@ func TestCandlestickChart(t *testing.T) {
 			require.NoError(t, err)
 			data, err := p.Bytes()
 			require.NoError(t, err)
-			assert.Greater(t, len(data), 100)
+			assertEqualSVG(t, tt.expectedSVG, data)
 		})
 	}
 }
@@ -104,10 +105,7 @@ func TestCandlestickChartError(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		tt := tt // capture loop variable
 		t.Run(strconv.Itoa(i)+"-"+tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			painterOptions := PainterOptions{
 				OutputFormat: ChartOutputSVG,
 				Width:        600,
@@ -164,9 +162,7 @@ func TestOHLCDataValidation(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt // capture loop variable
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			assert.Equal(t, tt.expected, validateOHLCData(tt.ohlc))
 		})
 	}
@@ -207,14 +203,283 @@ func TestExtractClosePrices(t *testing.T) {
 func TestCandlestickStyles(t *testing.T) {
 	t.Parallel()
 
-	styles := []string{CandleStyleFilled, CandleStyleTraditional, CandleStyleOutline}
-	for _, style := range styles {
-		style := style // capture loop variable
-		t.Run(style, func(t *testing.T) {
+	tests := []struct {
+		style       string
+		expectedSVG string
+	}{
+		{
+			style:       CandleStyleFilled,
+			expectedSVG: "",
+		},
+		{
+			style:       CandleStyleTraditional,
+			expectedSVG: "",
+		},
+		{
+			style:       CandleStyleOutline,
+			expectedSVG: "",
+		},
+	}
+	for i, tc := range tests {
+		t.Run(strconv.Itoa(i)+"-"+tc.style, func(t *testing.T) {
+			opt := makeBasicCandlestickChartOption()
+			opt.SeriesList[0].CandleStyle = tc.style
+
+			painterOptions := PainterOptions{
+				OutputFormat: ChartOutputSVG,
+				Width:        600,
+				Height:       400,
+			}
+			p := NewPainter(painterOptions)
+
+			err := p.CandlestickChart(opt)
+			require.NoError(t, err)
+			data, err := p.Bytes()
+			require.NoError(t, err)
+			assertEqualSVG(t, tc.expectedSVG, data)
+		})
+	}
+}
+
+func makePatternTestData() []OHLCData {
+	return []OHLCData{
+		// Normal candle
+		{Open: 100, High: 110, Low: 95, Close: 105},
+		// Doji (open ≈ close)
+		{Open: 105, High: 108, Low: 102, Close: 105.1},
+		// Hammer (long lower shadow, small body at top)
+		{Open: 108, High: 109, Low: 98, Close: 107},
+		// Bearish candle for engulfing setup
+		{Open: 107, High: 108, Low: 103, Close: 104},
+		// Bullish engulfing (engulfs previous bearish candle)
+		{Open: 102, High: 115, Low: 101, Close: 113},
+	}
+}
+
+func TestCandlestickWithPatterns(t *testing.T) {
+	t.Parallel()
+
+	data := makePatternTestData()
+	series := NewCandlestickWithPatterns(data)
+
+	opt := CandlestickChartOption{
+		Title: TitleOption{
+			Text: "Candlestick Chart with Patterns",
+		},
+		Padding: NewBoxEqual(10),
+		XAxis: XAxisOption{
+			Labels: []string{"1", "2", "3", "4", "5"},
+		},
+		YAxis:      make([]YAxisOption, 1),
+		SeriesList: CandlestickSeriesList{series},
+	}
+
+	painterOptions := PainterOptions{
+		OutputFormat: ChartOutputSVG,
+		Width:        800,
+		Height:       600,
+	}
+	p := NewPainter(painterOptions)
+
+	err := p.CandlestickChart(opt)
+	require.NoError(t, err)
+	data2, err := p.Bytes()
+	require.NoError(t, err)
+	assert.Greater(t, len(data2), 100)
+
+	// Verify patterns were detected
+	assert.NotEmpty(t, series.MarkPoint.Points, "Should have detected some patterns")
+}
+
+func TestCandlestickWithSMA(t *testing.T) {
+	t.Parallel()
+
+	ohlcData := makeBasicCandlestickData()
+	candlestickSeries := CandlestickSeries{Data: ohlcData}
+
+	// Generate SMA line series
+	closes := ExtractClosePrices(candlestickSeries)
+	sma3 := CalculateSMA(closes, 3)
+
+	// Create line chart overlaid with candlestick using line chart as primary
+	lineSeriesList := NewSeriesListLine([][]float64{sma3})
+
+	// Test just the line chart with SMA data
+	chartOpt := ChartOption{
+		SeriesList: lineSeriesList.ToGenericSeriesList(),
+		Title:      TitleOption{Text: "SMA Line Chart"},
+		XAxis: XAxisOption{
+			Labels: []string{"Jan", "Feb", "Mar", "Apr", "May"},
+		},
+		YAxis: make([]YAxisOption, 1),
+		Legend: LegendOption{
+			SeriesNames: []string{"SMA(3)"},
+		},
+	}
+
+	painter, err := Render(chartOpt)
+	require.NoError(t, err)
+	data, err := painter.Bytes()
+	require.NoError(t, err)
+	assert.Greater(t, len(data), 100)
+}
+
+func TestCandlestickWithBollingerBands(t *testing.T) {
+	t.Parallel()
+
+	// Create longer dataset for meaningful Bollinger Bands
+	ohlcData := []OHLCData{
+		{Open: 100, High: 110, Low: 95, Close: 105},
+		{Open: 105, High: 115, Low: 100, Close: 112},
+		{Open: 112, High: 118, Low: 108, Close: 115},
+		{Open: 115, High: 120, Low: 110, Close: 118},
+		{Open: 118, High: 125, Low: 115, Close: 122},
+		{Open: 122, High: 128, Low: 119, Close: 125},
+		{Open: 125, High: 130, Low: 122, Close: 127},
+		{Open: 127, High: 132, Low: 124, Close: 129},
+		{Open: 129, High: 135, Low: 126, Close: 131},
+		{Open: 131, High: 138, Low: 128, Close: 135},
+	}
+
+	candlestickSeries := CandlestickSeries{Data: ohlcData}
+
+	// Calculate Bollinger Bands
+	closes := ExtractClosePrices(candlestickSeries)
+	bands := CalculateBollingerBands(closes, 5, 2.0)
+
+	// Test Bollinger Bands calculation separately with line chart
+	lineSeriesList := NewSeriesListLine([][]float64{bands.Upper, bands.Middle, bands.Lower})
+
+	chartOpt := ChartOption{
+		SeriesList: lineSeriesList.ToGenericSeriesList(),
+		Title:      TitleOption{Text: "Bollinger Bands Lines"},
+		XAxis: XAxisOption{
+			Labels: []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"},
+		},
+		YAxis: make([]YAxisOption, 1),
+		Legend: LegendOption{
+			SeriesNames: []string{"BB Upper", "BB Middle", "BB Lower"},
+		},
+	}
+
+	painter, err := Render(chartOpt)
+	require.NoError(t, err)
+	data, err := painter.Bytes()
+	require.NoError(t, err)
+	assert.Greater(t, len(data), 100)
+}
+
+func TestCandlestickWithMarkLines(t *testing.T) {
+	t.Parallel()
+
+	data := makeBasicCandlestickData()
+	series := CandlestickSeries{
+		Data: data,
+		MarkLine: SeriesMarkLine{
+			Lines: []SeriesMark{
+				{Type: SeriesMarkTypeAverage, Value: 110.0}, // Resistance
+				{Type: SeriesMarkTypeAverage, Value: 100.0}, // Support
+			},
+		},
+	}
+
+	opt := CandlestickChartOption{
+		Title: TitleOption{
+			Text: "Candlestick with Support/Resistance",
+		},
+		Padding: NewBoxEqual(10),
+		XAxis: XAxisOption{
+			Labels: []string{"Jan", "Feb", "Mar", "Apr", "May"},
+		},
+		YAxis:      make([]YAxisOption, 1),
+		SeriesList: CandlestickSeriesList{series},
+	}
+
+	painterOptions := PainterOptions{
+		OutputFormat: ChartOutputSVG,
+		Width:        800,
+		Height:       600,
+	}
+	p := NewPainter(painterOptions)
+
+	err := p.CandlestickChart(opt)
+	require.NoError(t, err)
+	data2, err := p.Bytes()
+	require.NoError(t, err)
+	assert.Greater(t, len(data2), 100)
+}
+
+func TestCandlestickAggregation(t *testing.T) {
+	t.Parallel()
+
+	// Create longer dataset to test aggregation
+	data := []OHLCData{
+		{Open: 100, High: 110, Low: 95, Close: 105},  // Period 1
+		{Open: 105, High: 115, Low: 100, Close: 112}, // Period 1
+		{Open: 112, High: 118, Low: 108, Close: 115}, // Period 2
+		{Open: 115, High: 120, Low: 110, Close: 118}, // Period 2
+		{Open: 118, High: 125, Low: 115, Close: 122}, // Period 3
+		{Open: 122, High: 128, Low: 119, Close: 125}, // Period 3
+	}
+
+	series := CandlestickSeries{Data: data, Name: "1-Period"}
+	aggregated := AggregateCandlestick(series, 2) // Aggregate into 2-period candles
+
+	// Should have 3 aggregated candles from 6 original candles
+	assert.Len(t, aggregated.Data, 3)
+	assert.Equal(t, "1-Period (Aggregated)", aggregated.Name)
+
+	// Test first aggregated candle
+	first := aggregated.Data[0]
+	assert.InDelta(t, 100.0, first.Open, 0.001)  // First open
+	assert.InDelta(t, 112.0, first.Close, 0.001) // Last close of period
+	assert.InDelta(t, 115.0, first.High, 0.001)  // Max high
+	assert.InDelta(t, 95.0, first.Low, 0.001)    // Min low
+
+	// Render aggregated chart
+	opt := CandlestickChartOption{
+		Title: TitleOption{
+			Text: "Aggregated Candlestick Chart",
+		},
+		Padding: NewBoxEqual(10),
+		XAxis: XAxisOption{
+			Labels: []string{"Period 1", "Period 2", "Period 3"},
+		},
+		YAxis:      make([]YAxisOption, 1),
+		SeriesList: CandlestickSeriesList{aggregated},
+	}
+
+	painterOptions := PainterOptions{
+		OutputFormat: ChartOutputSVG,
+		Width:        600,
+		Height:       400,
+	}
+	p := NewPainter(painterOptions)
+
+	err := p.CandlestickChart(opt)
+	require.NoError(t, err)
+	data2, err := p.Bytes()
+	require.NoError(t, err)
+	assert.Greater(t, len(data2), 100)
+}
+
+func TestCandlestickDifferentThemes(t *testing.T) {
+	t.Parallel()
+
+	themes := []ColorPalette{
+		GetTheme(ThemeLight),
+		GetTheme(ThemeDark),
+		GetTheme(ThemeAnt),
+		GetTheme(ThemeGrafana),
+	}
+
+	for i, theme := range themes {
+		theme := theme // capture loop variable
+		t.Run(fmt.Sprintf("theme_%d", i), func(t *testing.T) {
 			t.Parallel()
 
 			opt := makeBasicCandlestickChartOption()
-			opt.SeriesList[0].CandleStyle = style
+			opt.Theme = theme
 
 			painterOptions := PainterOptions{
 				OutputFormat: ChartOutputSVG,
@@ -230,4 +495,45 @@ func TestCandlestickStyles(t *testing.T) {
 			assert.Greater(t, len(data), 100)
 		})
 	}
+}
+
+func TestCandlestickLargeDataset(t *testing.T) {
+	t.Parallel()
+
+	// Generate larger dataset
+	var data []OHLCData
+	for i := 0; i < 50; i++ {
+		basePrice := 100.0 + float64(i)*0.5
+		data = append(data, OHLCData{
+			Open:  basePrice,
+			High:  basePrice + 5,
+			Low:   basePrice - 3,
+			Close: basePrice + 2,
+		})
+	}
+
+	opt := CandlestickChartOption{
+		Title: TitleOption{
+			Text: "Large Dataset Candlestick Chart",
+		},
+		Padding: NewBoxEqual(10),
+		XAxis: XAxisOption{
+			Show: Ptr(false), // Hide labels for large dataset
+		},
+		YAxis:      make([]YAxisOption, 1),
+		SeriesList: NewSeriesListCandlestick([][]OHLCData{data}),
+	}
+
+	painterOptions := PainterOptions{
+		OutputFormat: ChartOutputSVG,
+		Width:        1200,
+		Height:       600,
+	}
+	p := NewPainter(painterOptions)
+
+	err := p.CandlestickChart(opt)
+	require.NoError(t, err)
+	data2, err := p.Bytes()
+	require.NoError(t, err)
+	assert.Greater(t, len(data2), 100)
 }

@@ -32,18 +32,38 @@ const (
 	SeriesMarkTypeMax      = "max"
 	SeriesMarkTypeMin      = "min"
 	SeriesMarkTypeAverage  = "average"
+	SeriesMarkTypePattern  = "pattern"
 	SeriesTrendTypeLinear  = "linear"
 	SeriesTrendTypeCubic   = "cubic"
 	SeriesTrendTypeAverage = "average"
+
+	// Candlestick pattern types
+	PatternDoji           = "doji"
+	PatternHammer         = "hammer"
+	PatternInvertedHammer = "inverted_hammer"
+	PatternEngulfingBull  = "engulfing_bullish"
+	PatternEngulfingBear  = "engulfing_bearish"
+	PatternHarami         = "harami"
+	PatternMorningStar    = "morning_star"
+	PatternEveningStar    = "evening_star"
+	PatternShootingStar   = "shooting_star"
+	PatternGravestone     = "gravestone_doji"
+	PatternDragonfly      = "dragonfly_doji"
 )
 
 // SeriesMark describes a single mark line or point type.
 type SeriesMark struct {
-	// Type is the mark data type: "max", "min", "average". "average" is only for mark line.
+	// Type is the mark data type: "max", "min", "average", "pattern", etc.
 	Type string
 	// Global specifies the mark references the sum of all series. Only used when
 	// the Series is "Stacked" and the mark is on the LAST Series of the SeriesList.
 	Global bool
+	// PatternType specifies the specific pattern when Type == "pattern"
+	PatternType string
+	// Index specifies the exact data point index for pattern marks
+	Index *int
+	// Value can override the displayed value (useful for pattern names)
+	Value interface{}
 }
 
 // NewSeriesMarkList returns a SeriesMarkList initialized for the given types.
@@ -2148,4 +2168,224 @@ func ExtractClosePrices(series CandlestickSeries) []float64 {
 		}
 	}
 	return result
+}
+
+// PatternDetectionOption configures pattern detection sensitivity
+type PatternDetectionOption struct {
+	// DojiThreshold is the percentage threshold for doji detection (default: 0.1%)
+	DojiThreshold float64
+	// ShadowRatio is the minimum shadow-to-body ratio for hammer patterns (default: 2.0)
+	ShadowRatio float64
+	// EngulfingMinSize is minimum engulfing percentage (default: 80%)
+	EngulfingMinSize float64
+}
+
+// DetectDoji identifies doji patterns where open ≈ close
+func DetectDoji(ohlc OHLCData, threshold float64) bool {
+	if !validateOHLCData(ohlc) {
+		return false
+	}
+	if threshold <= 0 {
+		threshold = 0.001 // 0.1% default
+	}
+	bodySize := math.Abs(ohlc.Close - ohlc.Open)
+	priceRange := ohlc.High - ohlc.Low
+	if priceRange == 0 {
+		return false
+	}
+	return (bodySize / priceRange) <= threshold
+}
+
+// DetectHammer identifies hammer patterns (long lower shadow, small body at top)
+func DetectHammer(ohlc OHLCData, shadowRatio float64) bool {
+	if !validateOHLCData(ohlc) {
+		return false
+	}
+	if shadowRatio <= 0 {
+		shadowRatio = 2.0 // default
+	}
+
+	bodySize := math.Abs(ohlc.Close - ohlc.Open)
+	lowerShadow := math.Min(ohlc.Open, ohlc.Close) - ohlc.Low
+	upperShadow := ohlc.High - math.Max(ohlc.Open, ohlc.Close)
+
+	// Hammer: long lower shadow, short upper shadow, small body
+	return lowerShadow >= shadowRatio*bodySize && upperShadow <= bodySize*0.5
+}
+
+// DetectInvertedHammer identifies inverted hammer patterns
+func DetectInvertedHammer(ohlc OHLCData, shadowRatio float64) bool {
+	if !validateOHLCData(ohlc) {
+		return false
+	}
+	if shadowRatio <= 0 {
+		shadowRatio = 2.0
+	}
+
+	bodySize := math.Abs(ohlc.Close - ohlc.Open)
+	lowerShadow := math.Min(ohlc.Open, ohlc.Close) - ohlc.Low
+	upperShadow := ohlc.High - math.Max(ohlc.Open, ohlc.Close)
+
+	// Inverted hammer: long upper shadow, short lower shadow, small body
+	return upperShadow >= shadowRatio*bodySize && lowerShadow <= bodySize*0.5
+}
+
+// DetectEngulfing identifies bullish/bearish engulfing patterns
+func DetectEngulfing(prev, current OHLCData, minSize float64) (bool, bool) {
+	if !validateOHLCData(prev) || !validateOHLCData(current) {
+		return false, false
+	}
+	if minSize <= 0 {
+		minSize = 0.8 // 80% default
+	}
+
+	prevBody := math.Abs(prev.Close - prev.Open)
+	currentBody := math.Abs(current.Close - current.Open)
+
+	// Current candle must engulf previous candle's body
+	prevTop := math.Max(prev.Open, prev.Close)
+	prevBottom := math.Min(prev.Open, prev.Close)
+	currentTop := math.Max(current.Open, current.Close)
+	currentBottom := math.Min(current.Open, current.Close)
+
+	isEngulfing := currentTop > prevTop && currentBottom < prevBottom
+	isSizeSignificant := currentBody >= minSize*prevBody
+
+	if !isEngulfing || !isSizeSignificant {
+		return false, false
+	}
+
+	// Determine bullish or bearish
+	prevBearish := prev.Close < prev.Open
+	currentBullish := current.Close > current.Open
+
+	bullishEngulfing := prevBearish && currentBullish
+	bearishEngulfing := !prevBearish && !currentBullish
+
+	return bullishEngulfing, bearishEngulfing
+}
+
+// ScanCandlestickPatterns scans entire series for patterns and returns mark points
+func ScanCandlestickPatterns(series CandlestickSeries, options ...PatternDetectionOption) SeriesMarkList {
+	var opt PatternDetectionOption
+	if len(options) > 0 {
+		opt = options[0]
+	}
+
+	var marks SeriesMarkList
+
+	for i, ohlc := range series.Data {
+		// Single candle patterns
+		if DetectDoji(ohlc, opt.DojiThreshold) {
+			marks = append(marks, SeriesMark{
+				Type:        SeriesMarkTypePattern,
+				PatternType: PatternDoji,
+				Index:       &i,
+				Value:       "Doji",
+			})
+		}
+
+		if DetectHammer(ohlc, opt.ShadowRatio) {
+			marks = append(marks, SeriesMark{
+				Type:        SeriesMarkTypePattern,
+				PatternType: PatternHammer,
+				Index:       &i,
+				Value:       "Hammer",
+			})
+		}
+
+		if DetectInvertedHammer(ohlc, opt.ShadowRatio) {
+			marks = append(marks, SeriesMark{
+				Type:        SeriesMarkTypePattern,
+				PatternType: PatternInvertedHammer,
+				Index:       &i,
+				Value:       "Inverted Hammer",
+			})
+		}
+
+		// Two candle patterns (need previous candle)
+		if i > 0 {
+			bullishEngulfing, bearishEngulfing := DetectEngulfing(series.Data[i-1], ohlc, opt.EngulfingMinSize)
+			if bullishEngulfing {
+				marks = append(marks, SeriesMark{
+					Type:        SeriesMarkTypePattern,
+					PatternType: PatternEngulfingBull,
+					Index:       &i,
+					Value:       "Bullish Engulfing",
+				})
+			}
+			if bearishEngulfing {
+				marks = append(marks, SeriesMark{
+					Type:        SeriesMarkTypePattern,
+					PatternType: PatternEngulfingBear,
+					Index:       &i,
+					Value:       "Bearish Engulfing",
+				})
+			}
+		}
+	}
+
+	return marks
+}
+
+// AddPatternMarkPoints is a convenience function to detect and add pattern mark points
+func (s *CandlestickSeries) AddPatternMarkPoints(options ...PatternDetectionOption) {
+	patterns := ScanCandlestickPatterns(*s, options...)
+	s.MarkPoint.Points = append(s.MarkPoint.Points, patterns...)
+}
+
+// NewCandlestickWithPatterns creates a candlestick series with automatic pattern detection
+func NewCandlestickWithPatterns(data []OHLCData, options ...PatternDetectionOption) CandlestickSeries {
+	series := CandlestickSeries{Data: data}
+	series.AddPatternMarkPoints(options...)
+	return series
+}
+
+// AggregateCandlestick aggregates OHLC data by the specified factor.
+func AggregateCandlestick(data CandlestickSeries, factor int) CandlestickSeries {
+	if factor <= 1 {
+		return data
+	}
+
+	aggregated := make([]OHLCData, 0, len(data.Data)/factor)
+
+	for i := 0; i < len(data.Data); i += factor {
+		end := i + factor
+		if end > len(data.Data) {
+			end = len(data.Data)
+		}
+
+		// Aggregate OHLC for this period
+		open := data.Data[i].Open       // First open
+		close := data.Data[end-1].Close // Last close
+		high := data.Data[i].High       // Find max high
+		low := data.Data[i].Low         // Find min low
+
+		for j := i; j < end; j++ {
+			if data.Data[j].High > high {
+				high = data.Data[j].High
+			}
+			if data.Data[j].Low < low {
+				low = data.Data[j].Low
+			}
+		}
+
+		aggregated = append(aggregated, OHLCData{
+			Open:  open,
+			High:  high,
+			Low:   low,
+			Close: close,
+		})
+	}
+
+	return CandlestickSeries{
+		Data:        aggregated,
+		YAxisIndex:  data.YAxisIndex,
+		Label:       data.Label,
+		Name:        data.Name + " (Aggregated)",
+		MarkPoint:   data.MarkPoint,
+		MarkLine:    data.MarkLine,
+		CandleWidth: data.CandleWidth,
+		CandleStyle: data.CandleStyle,
+	}
 }
