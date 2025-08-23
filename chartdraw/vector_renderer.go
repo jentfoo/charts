@@ -101,6 +101,7 @@ func measureStringWithFallback(face font.Face, s string, fontSize float64) fixed
 
 		// If glyph is missing or has very small advance, estimate size
 		if (!ok || glyphAdvance/64 <= fixed.Int26_6(fontSize*0.75)) && isEmojiOrSymbol(c) {
+			// TODO - attempt to load glyph from emoji font
 			// Estimate emoji width as approximately equal to the font size
 			glyphAdvance = fixed.Int26_6(fontSize * 64)
 		}

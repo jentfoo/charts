@@ -121,14 +121,39 @@ func (rgc *RasterGraphicContext) CreateStringPath(s string, x, y float64) (curso
 	prev, hasPrev := truetype.Index(0), false
 	for _, rc := range s {
 		index := f.Index(rc)
+		currentFont := f
+		
+		// Try emoji fallback if character missing and is emoji/symbol
+		if index == 0 && IsEmojiOrSymbol(rc) {
+			if emojiFont := GetFont(EmojiFont); emojiFont != nil {
+				emojiIndex := emojiFont.Index(rc)
+				if emojiIndex != 0 {
+					// Use emoji font for this character
+					index = emojiIndex
+					currentFont = emojiFont
+				}
+			}
+		}
+		
 		if hasPrev {
 			x += fUnitsToFloat64(f.Kern(fixed.Int26_6(rgc.current.Scale), prev, index))
 		}
-		if err = rgc.drawGlyph(index, x, y); err != nil {
+		
+		if currentFont != f {
+			// Temporarily switch to emoji font for this glyph
+			originalFont := rgc.current.Font
+			rgc.current.Font = currentFont
+			err = rgc.drawGlyph(index, x, y)
+			rgc.current.Font = originalFont
+		} else {
+			err = rgc.drawGlyph(index, x, y)
+		}
+		
+		if err != nil {
 			cursor = x - startx
 			return
 		}
-		x += fUnitsToFloat64(f.HMetric(fixed.Int26_6(rgc.current.Scale), index).AdvanceWidth)
+		x += fUnitsToFloat64(currentFont.HMetric(fixed.Int26_6(rgc.current.Scale), index).AdvanceWidth)
 		prev, hasPrev = index, true
 	}
 	cursor = x - startx
@@ -151,13 +176,35 @@ func (rgc *RasterGraphicContext) GetStringBounds(s string) (left, top, right, bo
 	prev, hasPrev := truetype.Index(0), false
 	for _, rc := range s {
 		index := f.Index(rc)
+		currentFont := f
+		
+		// Try emoji fallback if character missing and is emoji/symbol
+		if index == 0 && IsEmojiOrSymbol(rc) {
+			if emojiFont := GetFont(EmojiFont); emojiFont != nil {
+				emojiIndex := emojiFont.Index(rc)
+				if emojiIndex != 0 {
+					// Use emoji font for this character
+					index = emojiIndex
+					currentFont = emojiFont
+				}
+			}
+		}
+		
 		if hasPrev {
 			cursor += fUnitsToFloat64(f.Kern(fixed.Int26_6(rgc.current.Scale), prev, index))
 		}
 
-		if err = rgc.glyphBuf.Load(rgc.current.Font, fixed.Int26_6(rgc.current.Scale), index, font.HintingNone); err != nil {
-			return
+		if currentFont != f {
+			// Load glyph from emoji font
+			if err = rgc.glyphBuf.Load(currentFont, fixed.Int26_6(rgc.current.Scale), index, font.HintingNone); err != nil {
+				return
+			}
+		} else {
+			if err = rgc.glyphBuf.Load(rgc.current.Font, fixed.Int26_6(rgc.current.Scale), index, font.HintingNone); err != nil {
+				return
+			}
 		}
+		
 		e0 := 0
 		for _, e1 := range rgc.glyphBuf.Ends {
 			ps := rgc.glyphBuf.Points[e0:e1]
@@ -170,7 +217,7 @@ func (rgc *RasterGraphicContext) GetStringBounds(s string) (left, top, right, bo
 			}
 			e0 = e1
 		}
-		cursor += fUnitsToFloat64(f.HMetric(fixed.Int26_6(rgc.current.Scale), index).AdvanceWidth)
+		cursor += fUnitsToFloat64(currentFont.HMetric(fixed.Int26_6(rgc.current.Scale), index).AdvanceWidth)
 		prev, hasPrev = index, true
 	}
 	return
