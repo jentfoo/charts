@@ -18,19 +18,30 @@ func newCandlestickChart(p *Painter, opt CandlestickChartOption) *candlestickCha
 	}
 }
 
-// CandlestickChartOption defines options for rendering candlestick charts.
+// CandlestickChartOption defines options for rendering candlestick charts. Render the chart using Painter.CandlestickChart.
 type CandlestickChartOption struct {
-	Theme      ColorPalette
-	Padding    Box
+	// Theme specifies the colors used for the candlestick chart.
+	Theme ColorPalette
+	// Padding specifies the padding around the chart.
+	Padding Box
+	// SeriesList provides the OHLC data population for the chart. Typically constructed using NewSeriesListCandlestick.
 	SeriesList CandlestickSeriesList
-	XAxis      XAxisOption
-	YAxis      []YAxisOption
-	Title      TitleOption
-	Legend     LegendOption
-	// CandleWidth specifies default width of candlestick bodies (0.0-1.0)
+	// XAxis contains options for the x-axis.
+	XAxis XAxisOption
+	// YAxis contains options for the y-axis. At most two y-axes are supported.
+	YAxis []YAxisOption
+	// Title contains options for rendering the chart title.
+	Title TitleOption
+	// Legend contains options for the data legend.
+	Legend LegendOption
+	// CandleWidth specifies the default width of candlestick bodies as a ratio (0.0-1.0).
 	CandleWidth float64
-	// WickWidth stroke width for high-low wicks
-	WickWidth      float64
+	// ShowWicks controls whether high-low wicks are displayed by default. When nil, wicks are shown.
+	// Individual series can override this setting.
+	ShowWicks *bool
+	// WickWidth is the stroke width for high-low wicks in pixels.
+	WickWidth float64
+	// ValueFormatter defines how float values are rendered to strings, notably for numeric axis labels.
 	ValueFormatter ValueFormatter
 }
 
@@ -206,7 +217,11 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 			}
 
 			// Draw high-low wick (if enabled)
-			if flagIs(true, series.ShowWicks) || series.ShowWicks == nil {
+			showWicks := !flagIs(false, opt.ShowWicks)
+			if series.ShowWicks != nil {
+				showWicks = *series.ShowWicks
+			}
+			if showWicks {
 				wickWidth := opt.WickWidth
 				if wickWidth <= 0 {
 					wickWidth = 1.0 // Default wick width
