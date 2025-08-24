@@ -44,6 +44,21 @@ func TestSeriesLists(t *testing.T) {
 	}
 }
 
+func TestFilterSeriesListCandlestick(t *testing.T) {
+	t.Parallel()
+
+	generic := GenericSeriesList{
+		{Values: []float64{1, 2}, Type: ChartTypeCandlestick},
+		{Values: []float64{3, 4}, Type: ChartTypeLine},
+	}
+
+	filtered := filterSeriesList[CandlestickSeriesList](generic, ChartTypeCandlestick)
+	assert.Len(t, filtered, 1)
+	require.Len(t, filtered[0].Data, 2)
+	assert.InDelta(t, 1.0, filtered[0].Data[0].Open, 0)
+	assert.InDelta(t, 2.0, filtered[0].Data[1].Close, 0)
+}
+
 func TestGetSeriesMinMaxSumMaxEmpty(t *testing.T) {
 	t.Parallel()
 
