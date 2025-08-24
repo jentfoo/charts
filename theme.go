@@ -92,6 +92,14 @@ type ColorPalette interface {
 	WithTitleBorderColor(Color) ColorPalette
 	// WithLegendBorderColor returns a new ColorPalette with the specified legend border color.
 	WithLegendBorderColor(Color) ColorPalette
+	// GetUpColor returns the color for bullish (close > open) candles.
+	GetUpColor() Color
+	// GetDownColor returns the color for bearish (close < open) candles.
+	GetDownColor() Color
+	// GetCandleWickColor returns the color for the high-low wicks.
+	GetCandleWickColor() Color
+	// GetSeriesUpDownColors returns distinct "up" and "down" colors for each series index.
+	GetSeriesUpDownColors(index int) (Color, Color)
 }
 
 type themeColorPalette struct {
@@ -111,6 +119,10 @@ type themeColorPalette struct {
 	legendBorderColor  Color
 	seriesColors       []Color
 	seriesTrendColors  []Color
+	upColor            Color
+	downColor          Color
+	candleWickColor    Color
+	seriesUpDownColors [][2]Color
 }
 
 func (t *themeColorPalette) GetTitleTextColor() Color {
@@ -135,6 +147,44 @@ func (t *themeColorPalette) GetXAxisTextColor() Color {
 
 func (t *themeColorPalette) GetYAxisTextColor() Color {
 	return t.yaxisTextColor
+}
+
+func (t *themeColorPalette) GetUpColor() Color {
+	if t.upColor.IsZero() {
+		return Color{R: 34, G: 197, B: 94, A: 255} // Green default
+	}
+	return t.upColor
+}
+
+func (t *themeColorPalette) GetDownColor() Color {
+	if t.downColor.IsZero() {
+		return Color{R: 239, G: 68, B: 68, A: 255} // Red default
+	}
+	return t.downColor
+}
+
+func (t *themeColorPalette) GetCandleWickColor() Color {
+	return t.candleWickColor
+}
+
+func (t *themeColorPalette) GetSeriesUpDownColors(index int) (Color, Color) {
+	// If custom series up/down colors are defined, use them
+	if len(t.seriesUpDownColors) > 0 {
+		colorCount := len(t.seriesUpDownColors)
+		if index < colorCount {
+			return t.seriesUpDownColors[index][0], t.seriesUpDownColors[index][1]
+		} else {
+			// Apply the same color adjustment logic as GetSeriesColor for looping
+			baseColors := t.seriesUpDownColors[index%colorCount]
+			loopCount := index / colorCount
+			upColor := adjustSeriesColor(baseColors[0], loopCount, t.isDarkMode)
+			downColor := adjustSeriesColor(baseColors[1], loopCount, t.isDarkMode)
+			return upColor, downColor
+		}
+	}
+
+	// Fallback to default theme up/down colors
+	return t.GetUpColor(), t.GetDownColor()
 }
 
 // ThemeOption defines color options for a theme.
@@ -173,6 +223,14 @@ type ThemeOption struct {
 	SeriesColors []Color
 	// SeriesTrendColors provides the palette for rendered trend lines.
 	SeriesTrendColors []Color
+	// UpColor is the color for bullish (close > open) candles. Default: green
+	UpColor Color
+	// DownColor is the color for bearish (close < open) candles. Default: red
+	DownColor Color
+	// CandleWickColor is the color for the high-low wicks. If not set, uses body color
+	CandleWickColor Color
+	// SeriesUpDownColors provides distinct up/down color pairs for each series
+	SeriesUpDownColors [][2]Color
 }
 
 var palettes = sync.Map{}
@@ -184,6 +242,12 @@ var defaultDarkFontColor = Color{R: 238, G: 238, B: 238, A: 255}
 var defaultGlobalMarkFillColor = ColorLightGray
 
 func init() {
+	defaultSeriesUpDownColors := [][2]Color{
+		{
+			Color{R: 34, G: 197, B: 94, A: 255},
+			Color{R: 239, G: 68, B: 68, A: 255},
+		},
+	}
 	echartSeriesColors := []Color{
 		ColorBlueAlt3,
 		ColorGreenAlt6,
@@ -204,6 +268,7 @@ func init() {
 			BackgroundColor:    ColorWhite,
 			TextColor:          Color{R: 70, G: 70, B: 70, A: 255},
 			SeriesColors:       echartSeriesColors,
+			SeriesUpDownColors: defaultSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -215,6 +280,7 @@ func init() {
 			BackgroundColor:    ColorDarkGray,
 			TextColor:          Color{R: 238, G: 238, B: 238, A: 255},
 			SeriesColors:       echartSeriesColors,
+			SeriesUpDownColors: defaultSeriesUpDownColors,
 		},
 	)
 	vividSeriesColors := []Color{
@@ -253,6 +319,7 @@ func init() {
 			BackgroundColor:    ColorWhite,
 			TextColor:          Color{R: 70, G: 70, B: 70, A: 255},
 			SeriesColors:       vividSeriesColors,
+			SeriesUpDownColors: defaultSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -264,6 +331,7 @@ func init() {
 			BackgroundColor:    ColorDarkGray,
 			TextColor:          Color{R: 238, G: 238, B: 238, A: 255},
 			SeriesColors:       vividSeriesColors,
+			SeriesUpDownColors: defaultSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -298,6 +366,7 @@ func init() {
 				},
 				ColorOrangeAlt3,
 			},
+			SeriesUpDownColors: defaultSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -330,6 +399,7 @@ func init() {
 				},
 				ColorGreenAlt4,
 			},
+			SeriesUpDownColors: defaultSeriesUpDownColors,
 		},
 	)
 	natureSeriesColors := []Color{
@@ -373,6 +443,7 @@ func init() {
 			TextColorTitle:     greenHeaderText,
 			TextColorLegend:    greenHeaderText,
 			SeriesColors:       natureSeriesColors,
+			SeriesUpDownColors: defaultSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -385,6 +456,7 @@ func init() {
 			TextColor:          Color{R: 238, G: 238, B: 238, A: 255},
 			TextColorTitle:     ColorWhite,
 			SeriesColors:       natureSeriesColors,
+			SeriesUpDownColors: defaultSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -416,6 +488,7 @@ func init() {
 					R: 25, G: 42, B: 64, A: 255,
 				},
 			},
+			SeriesUpDownColors: defaultSeriesUpDownColors,
 		},
 	)
 	blueHeaderText := ColorBlue.WithAdjustHSL(0, 0, -0.2)
@@ -447,6 +520,7 @@ func init() {
 				ColorPink,
 				ColorPlum,
 			},
+			SeriesUpDownColors: defaultSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -491,6 +565,7 @@ func init() {
 					R: 120, G: 160, B: 140, A: 255,
 				},
 			},
+			SeriesUpDownColors: defaultSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -512,6 +587,7 @@ func init() {
 				{R: 228, G: 228, B: 228, A: 255},
 				{R: 248, G: 248, B: 248, A: 255},
 			},
+			SeriesUpDownColors: defaultSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -545,6 +621,7 @@ func init() {
 					R: 80, G: 110, B: 190, A: 255,
 				},
 			},
+			SeriesUpDownColors: defaultSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -575,6 +652,7 @@ func init() {
 					R: 110, G: 210, B: 200, A: 255,
 				},
 			},
+			SeriesUpDownColors: defaultSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -601,6 +679,7 @@ func init() {
 				},
 				ColorOrangeAlt2,
 			},
+			SeriesUpDownColors: defaultSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -629,6 +708,7 @@ func init() {
 					R: 230, G: 140, B: 50, A: 255,
 				},
 			},
+			SeriesUpDownColors: defaultSeriesUpDownColors,
 		},
 	)
 
@@ -712,6 +792,12 @@ func makeColorPalette(o ThemeOption) *themeColorPalette {
 		o.SeriesTrendColors = append(o.SeriesTrendColors, autoSeriesTrendColor(o.SeriesColors[i]))
 	}
 
+	// If SeriesUpDownColors is not provided, use default green/red for all series
+	if len(o.SeriesUpDownColors) == 0 {
+		defaultGreen := Color{R: 34, G: 197, B: 94, A: 255}
+		defaultRed := Color{R: 239, G: 68, B: 68, A: 255}
+		o.SeriesUpDownColors = [][2]Color{{defaultGreen, defaultRed}}
+	}
 	return &themeColorPalette{
 		isDarkMode:         o.IsDarkMode,
 		xaxisStrokeColor:   o.XAxisStrokeColor,
@@ -728,6 +814,10 @@ func makeColorPalette(o ThemeOption) *themeColorPalette {
 		yaxisTextColor:     o.TextColorYAxis,
 		seriesColors:       o.SeriesColors,
 		seriesTrendColors:  o.SeriesTrendColors,
+		upColor:            o.UpColor,
+		downColor:          o.DownColor,
+		candleWickColor:    o.CandleWickColor,
+		seriesUpDownColors: o.SeriesUpDownColors,
 	}
 }
 
