@@ -499,3 +499,80 @@ func testColorShadeVariation(t *testing.T, mutateFunc func(Color) Color, colors 
 	require.NoError(t, err)
 	assertEqualSVG(t, "", data)
 }
+
+func TestCandlestickThemes(t *testing.T) {
+	t.Parallel()
+
+	// Create large candlestick series to test color cycling
+	seriesCount := 10
+	dataPointsPerSeries := 5
+
+	var seriesList CandlestickSeriesList
+	var seriesNames []string
+
+	for i := 0; i < seriesCount; i++ {
+		basePrice := 100.0 + float64(i*20) // Different price ranges
+		data := make([]OHLCData, dataPointsPerSeries)
+
+		for j := 0; j < dataPointsPerSeries; j++ {
+			open := basePrice + float64(j*5)
+			high := open + 10.0
+			low := open - 5.0
+			close := open + float64((j%2)*10-5) // Alternating up/down
+
+			data[j] = OHLCData{
+				Open:  open,
+				High:  high,
+				Low:   low,
+				Close: close,
+			}
+		}
+
+		series := CandlestickSeries{
+			Data: data,
+			Name: fmt.Sprintf("Series %d", i+1),
+		}
+		seriesList = append(seriesList, series)
+		seriesNames = append(seriesNames, series.Name)
+	}
+
+	// Test each theme with the large candlestick series
+	for _, themeName := range allThemes {
+		themeName := themeName // capture loop variable
+		t.Run("theme_"+themeName, func(t *testing.T) {
+			t.Parallel()
+
+			opt := CandlestickChartOption{
+				Theme: GetTheme(themeName),
+				Title: TitleOption{Text: "Candlestick Colors - " + themeName},
+				XAxis: XAxisOption{
+					Labels: []string{"T1", "T2", "T3", "T4", "T5"},
+				},
+				YAxis:      make([]YAxisOption, 1),
+				SeriesList: seriesList,
+				Legend: LegendOption{
+					SeriesNames: seriesNames,
+					Show:        Ptr(true),
+				},
+				Padding: NewBoxEqual(10),
+			}
+
+			painterOptions := PainterOptions{
+				OutputFormat: ChartOutputSVG,
+				Width:        1200,
+				Height:       800,
+			}
+			p := NewPainter(painterOptions)
+
+			err := p.CandlestickChart(opt)
+			require.NoError(t, err)
+
+			buf, err := p.Bytes()
+			require.NoError(t, err)
+			assert.NotEmpty(t, buf)
+
+			// Expect empty SVG string for manual review
+			assertEqualSVG(t, "", buf)
+		})
+	}
+}

@@ -178,6 +178,7 @@ const (
 	ChartTypeFunnel        = "funnel"
 	ChartTypeHorizontalBar = "horizontalBar"
 	ChartTypeHeatMap       = "heatMap"
+	ChartTypeCandlestick   = "candlestick"
 )
 
 const (
