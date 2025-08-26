@@ -69,12 +69,26 @@ const (
 	SeriesMarkTypeMax     = "max"
 	SeriesMarkTypeMin     = "min"
 	SeriesMarkTypeAverage = "average"
+
 	// SeriesTrendTypeLinear represents a linear regression trend line that fits a straight line through the data points.
 	SeriesTrendTypeLinear = "linear"
 	// SeriesTrendTypeCubic represents a cubic polynomial (degree 3) regression trend line that fits a curved line through the data points.
 	SeriesTrendTypeCubic = "cubic"
-	// SeriesTrendTypeAverage represents a moving average trend line that smooths data using a sliding window average.
+	// Deprecated: SeriesTrendTypeAverage is deprecated, use SeriesTrendTypeSMA instead.
 	SeriesTrendTypeAverage = "average"
+	// SeriesTrendTypeSMA represents a Simple Moving Average trend line that smooths data using a sliding window average.
+	SeriesTrendTypeSMA = "sma"
+	// SeriesTrendTypeEMA represents an Exponential Moving Average trend line that gives more weight to recent data points.
+	SeriesTrendTypeEMA = "ema"
+	// SeriesTrendTypeBollingerUpper represents the upper Bollinger Band (SMA + 2 * standard deviation).
+	// Designed for financial time-series analysis to identify volatility boundaries around price movements.
+	SeriesTrendTypeBollingerUpper = "bollinger_upper"
+	// SeriesTrendTypeBollingerLower represents the lower Bollinger Band (SMA - 2 * standard deviation).
+	// Designed for financial time-series analysis to identify volatility boundaries around price movements.
+	SeriesTrendTypeBollingerLower = "bollinger_lower"
+	// SeriesTrendTypeRSI represents the Relative Strength Index momentum oscillator (0-100 scale).
+	// Measures momentum by analyzing sequential price changes, designed for financial time-series analysis.
+	SeriesTrendTypeRSI = "rsi"
 )
 
 // SeriesMark describes a single mark line or point type.
@@ -184,10 +198,14 @@ type SeriesTrendLine struct {
 	LineColor Color
 	// DashedLine indicates if the trend line will be a dashed line. Default depends on chart type.
 	DashedLine *bool
-	// Type specifies the trend line type: "linear", "cubic", "average".
+	// Type specifies the trend line type: "linear", "cubic", "sma", "ema", "rsi".
 	Type string
-	// Window is only used for average, defining how many points to consider.
+	// Deprecated: Window is deprecated, use Period instead.
 	Window int
+	// Period specifies the number of data points to consider for trend calculations.
+	// Used by moving averages (SMA, EMA), Bollinger Bands, RSI, and other indicators.
+	// For example, Period=20 calculates a 20-period moving average.
+	Period int
 }
 
 // GenericSeries references a population of data for any chart type. Chart-specific fields are only active
@@ -2016,8 +2034,8 @@ type CandlestickSeries struct {
 	MarkPoint SeriesMarkPoint
 	// MarkLine provides a configuration for mark lines for this series.
 	MarkLine SeriesMarkLine
-	// CandleWidth specifies the width of each candlestick body as percentage of available space (0.0-1.0)
-	CandleWidth float64
+	// TrendLine provides configurations for trend lines for this series.
+	TrendLine []SeriesTrendLine
 	// ShowWicks when false hides the high-low wicks (showing only the body)
 	ShowWicks *bool
 	// CandleStyle specifies the visual style: "filled", "traditional", "outline"
@@ -2157,7 +2175,6 @@ type CandlestickSeriesOption struct {
 	Names       []string
 	MarkPoint   SeriesMarkPoint
 	MarkLine    SeriesMarkLine
-	CandleWidth float64
 	CandleStyle string
 }
 
@@ -2175,7 +2192,6 @@ func NewSeriesListCandlestick(data [][]OHLCData, opts ...CandlestickSeriesOption
 			Label:       opt.Label,
 			MarkPoint:   opt.MarkPoint,
 			MarkLine:    opt.MarkLine,
-			CandleWidth: opt.CandleWidth,
 			CandleStyle: opt.CandleStyle,
 		}
 		if index < len(opt.Names) {
@@ -2243,7 +2259,6 @@ func AggregateCandlestick(data CandlestickSeries, factor int) CandlestickSeries 
 		Name:        data.Name + " (Aggregated)",
 		MarkPoint:   data.MarkPoint,
 		MarkLine:    data.MarkLine,
-		CandleWidth: data.CandleWidth,
 		CandleStyle: data.CandleStyle,
 	}
 }

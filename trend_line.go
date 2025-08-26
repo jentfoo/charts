@@ -59,6 +59,9 @@ func (t *trendLinePainter) Render() (Box, error) {
 		}
 
 		for _, trend := range opt.trends {
+			if trend.Window != 0 && trend.Period == 0 {
+				trend.Period = trend.Window
+			}
 			var fitted []float64
 			var err error
 			switch trend.Type {
@@ -66,8 +69,16 @@ func (t *trendLinePainter) Render() (Box, error) {
 				fitted, err = linearTrend(opt.seriesValues)
 			case SeriesTrendTypeCubic:
 				fitted, err = cubicTrend(opt.seriesValues)
-			case SeriesTrendTypeAverage:
-				fitted, err = movingAverageTrend(opt.seriesValues, trend.Window)
+			case SeriesTrendTypeSMA, "average" /* long term backwards compatibility */ :
+				fitted, err = movingAverageTrend(opt.seriesValues, trend.Period)
+			case SeriesTrendTypeEMA:
+				fitted, err = exponentialMovingAverageTrend(opt.seriesValues, trend.Period)
+			case SeriesTrendTypeBollingerUpper:
+				fitted, err = bollingerUpperTrend(opt.seriesValues, trend.Period)
+			case SeriesTrendTypeBollingerLower:
+				fitted, err = bollingerLowerTrend(opt.seriesValues, trend.Period)
+			case SeriesTrendTypeRSI:
+				fitted, err = rsiTrend(opt.seriesValues, trend.Period)
 			default:
 				// Unknown trend type; skip.
 				continue
@@ -238,6 +249,33 @@ func movingAverageTrend(y []float64, window int) ([]float64, error) {
 	return fitted, nil
 }
 
+// exponentialMovingAverageTrend computes an exponential moving average over the data using the given window size.
+// If window is <= 0, a default based on the data size is used.
+func exponentialMovingAverageTrend(y []float64, window int) ([]float64, error) {
+	n := len(y)
+	if n < 2 {
+		return nil, errors.New("not enough data points for exponential trend")
+	} else if n < 4 {
+		return linearTrend(y)
+	}
+	if window <= 0 {
+		window = chartdraw.MaxInt(2, n/5)
+	}
+
+	multiplier := 2.0 / (float64(window) + 1.0)
+	fitted := make([]float64, n)
+
+	// First value is the same as input
+	fitted[0] = y[0]
+
+	// Calculate EMA for each subsequent value
+	for i := 1; i < n; i++ {
+		fitted[i] = (y[i] * multiplier) + (fitted[i-1] * (1 - multiplier))
+	}
+
+	return fitted, nil
+}
+
 // solveLinearSystem solves a 4x4 linear system represented as an augmented matrix.
 // The input matrix has 4 rows and 5 columns (last column is the constants vector).
 func solveLinearSystem(mat [][]float64) ([]float64, error) {
@@ -273,4 +311,146 @@ func solveLinearSystem(mat [][]float64) ([]float64, error) {
 		sol[i] /= mat[i][i]
 	}
 	return sol, nil
+}
+
+// bollingerUpperTrend computes the upper Bollinger Band (SMA + 2 * standard deviation).
+func bollingerUpperTrend(y []float64, period int) ([]float64, error) {
+	if len(y) < 2 {
+		return nil, errors.New("not enough data points for Bollinger upper band")
+	}
+	if period <= 0 {
+		period = chartdraw.MaxInt(2, len(y)/5)
+	}
+	if period > len(y) {
+		return nil, errors.New("invalid period for Bollinger upper band")
+	}
+
+	// Calculate SMA first
+	sma, err := movingAverageTrend(y, period)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]float64, len(y))
+	for i := 0; i < len(y); i++ {
+		if i < period-1 {
+			result[i] = GetNullValue()
+			continue
+		}
+
+		// Calculate standard deviation for this period
+		mean := sma[i]
+		variance := 0.0
+		for j := i - period + 1; j <= i; j++ {
+			diff := y[j] - mean
+			variance += diff * diff
+		}
+		stddev := math.Sqrt(variance / float64(period))
+
+		result[i] = mean + (stddev * 2.0) // Using fixed 2.0 multiplier
+	}
+
+	return result, nil
+}
+
+// bollingerLowerTrend computes the lower Bollinger Band (SMA - 2 * standard deviation).
+func bollingerLowerTrend(y []float64, period int) ([]float64, error) {
+	if len(y) < 2 {
+		return nil, errors.New("not enough data points for Bollinger lower band")
+	}
+	if period <= 0 {
+		period = chartdraw.MaxInt(2, len(y)/5)
+	}
+	if period > len(y) {
+		return nil, errors.New("invalid period for Bollinger lower band")
+	}
+
+	// Calculate SMA first
+	sma, err := movingAverageTrend(y, period)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]float64, len(y))
+	for i := 0; i < len(y); i++ {
+		if i < period-1 {
+			result[i] = GetNullValue()
+			continue
+		}
+
+		// Calculate standard deviation for this period
+		mean := sma[i]
+		variance := 0.0
+		for j := i - period + 1; j <= i; j++ {
+			diff := y[j] - mean
+			variance += diff * diff
+		}
+		stddev := math.Sqrt(variance / float64(period))
+
+		result[i] = mean - (stddev * 2.0) // Using fixed 2.0 multiplier
+	}
+
+	return result, nil
+}
+
+// rsiTrend computes the Relative Strength Index momentum oscillator.
+func rsiTrend(y []float64, period int) ([]float64, error) {
+	if len(y) < 2 {
+		return nil, errors.New("not enough data points for RSI")
+	}
+	if period <= 0 {
+		period = chartdraw.MaxInt(2, len(y)/5)
+	}
+	if len(y) < period+1 {
+		return nil, errors.New("insufficient data for RSI")
+	}
+
+	result := make([]float64, len(y))
+
+	// Initialize first values as null
+	for i := 0; i < period; i++ {
+		result[i] = GetNullValue()
+	}
+
+	// Calculate price changes
+	gains := make([]float64, len(y)-1)
+	losses := make([]float64, len(y)-1)
+
+	for i := 1; i < len(y); i++ {
+		change := y[i] - y[i-1]
+		if change > 0 {
+			gains[i-1] = change
+			losses[i-1] = 0
+		} else {
+			gains[i-1] = 0
+			losses[i-1] = -change
+		}
+	}
+
+	// Calculate initial averages
+	var avgGain, avgLoss float64
+	for i := 0; i < period; i++ {
+		avgGain += gains[i]
+		avgLoss += losses[i]
+	}
+	avgGain /= float64(period)
+	avgLoss /= float64(period)
+
+	// Calculate RSI
+	for i := period; i < len(y); i++ {
+		if avgLoss == 0 {
+			result[i] = 100
+		} else {
+			rs := avgGain / avgLoss
+			result[i] = 100 - (100 / (1 + rs))
+		}
+
+		// Update averages for next iteration
+		if i < len(gains) {
+			avgGain = ((avgGain * float64(period-1)) + gains[i]) / float64(period)
+			avgLoss = ((avgLoss * float64(period-1)) + losses[i]) / float64(period)
+		}
+	}
+
+	return result, nil
 }

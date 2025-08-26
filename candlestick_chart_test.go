@@ -151,6 +151,18 @@ func TestCandlestickChart(t *testing.T) {
 			svg: "",
 		},
 		{
+			name: "with_trend_lines",
+			makeOptions: func() CandlestickChartOption {
+				opt := makeBasicCandlestickChartOption()
+				opt.SeriesList[0].TrendLine = []SeriesTrendLine{
+					{Type: SeriesTrendTypeSMA, Period: 3},
+					{Type: SeriesTrendTypeEMA, Period: 3},
+				}
+				return opt
+			},
+			svg: "",
+		},
+		{
 			name: "with_mark_lines",
 			makeOptions: func() CandlestickChartOption {
 				data := makeBasicCandlestickData()
@@ -256,9 +268,8 @@ func TestCandlestickChart(t *testing.T) {
 				ohlcData := makeBasicCandlestickData()
 				candlestickSeries := CandlestickSeries{Data: ohlcData}
 
-				// Generate SMA line series
-				closes := ExtractClosePrices(candlestickSeries)
-				_ = CalculateSMA(closes, 3)
+				// Test that trend lines can be added to candlestick series
+				candlestickSeries.TrendLine = NewTrendLine(SeriesTrendTypeAverage)
 
 				// Convert back to CandlestickChartOption for consistency
 				opt := makeBasicCandlestickChartOption()
@@ -284,22 +295,22 @@ func TestCandlestickChart(t *testing.T) {
 					{Open: 131, High: 138, Low: 128, Close: 135},
 				}
 
-				candlestickSeries := CandlestickSeries{Data: ohlcData}
-
-				// Calculate Bollinger Bands
-				closes := ExtractClosePrices(candlestickSeries)
-				_ = CalculateBollingerBands(closes, 5, 2.0)
-
-				// Convert to CandlestickChartOption for consistency
 				return CandlestickChartOption{
 					Title: TitleOption{Text: "Bollinger Bands Lines"},
 					XAxis: XAxisOption{
 						Labels: []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"},
 					},
-					YAxis:      make([]YAxisOption, 1),
-					SeriesList: CandlestickSeriesList{{Data: ohlcData}},
+					YAxis: make([]YAxisOption, 1),
+					SeriesList: CandlestickSeriesList{{
+						Data: ohlcData,
+						TrendLine: []SeriesTrendLine{
+							{Type: SeriesTrendTypeBollingerUpper, Period: 5},
+							{Type: SeriesTrendTypeSMA, Period: 5},
+							{Type: SeriesTrendTypeBollingerLower, Period: 5},
+						},
+					}},
 					Legend: LegendOption{
-						SeriesNames: []string{"BB Upper", "BB Middle", "BB Lower"},
+						Show: Ptr(true),
 					},
 					Padding: NewBoxEqual(10),
 				}
@@ -312,7 +323,8 @@ func TestCandlestickChart(t *testing.T) {
 				ohlcData := makeBasicCandlestickData()
 				series := CandlestickSeries{Data: ohlcData}
 
-				_ = AddEMAToKlines(series, 3, Color{})
+				// Test that EMA trend lines can be added to candlestick series
+				series.TrendLine = NewTrendLine(SeriesTrendTypeEMA)
 
 				// Convert to CandlestickChartOption for consistency
 				return CandlestickChartOption{
@@ -334,20 +346,21 @@ func TestCandlestickChart(t *testing.T) {
 			name: "with_rsi",
 			makeOptions: func() CandlestickChartOption {
 				ohlcData := makeBasicCandlestickData()
-				series := CandlestickSeries{Data: ohlcData}
 
-				_ = AddRSIToKlines(series, 3)
-
-				// Convert to CandlestickChartOption for consistency
 				return CandlestickChartOption{
-					Title: TitleOption{Text: "RSI Line Chart"},
+					Title: TitleOption{Text: "Candlestick (RSI tested)"},
 					XAxis: XAxisOption{
 						Labels: []string{"Jan", "Feb", "Mar", "Apr", "May"},
 					},
-					YAxis:      make([]YAxisOption, 1),
-					SeriesList: CandlestickSeriesList{{Data: ohlcData}},
+					YAxis: make([]YAxisOption, 1),
+					SeriesList: CandlestickSeriesList{{
+						Data: ohlcData,
+						TrendLine: []SeriesTrendLine{
+							{Type: SeriesTrendTypeRSI, Period: 3},
+						},
+					}},
 					Legend: LegendOption{
-						SeriesNames: []string{"RSI(3)"},
+						Show: Ptr(true),
 					},
 					Padding: NewBoxEqual(10),
 				}
@@ -628,18 +641,6 @@ func TestCandlestickSeriesListMethods(t *testing.T) {
 	assert.Len(t, genericList, 1)
 	assert.Equal(t, ChartTypeCandlestick, genericList[0].Type)
 	assert.Equal(t, len(data), len(genericList[0].Values))
-}
-
-func TestExtractClosePrices(t *testing.T) {
-	t.Parallel()
-
-	data := makeBasicCandlestickData()
-	series := CandlestickSeries{Data: data}
-
-	closePrices := ExtractClosePrices(series)
-	expected := []float64{105, 112, 115, 108, 109}
-
-	assert.Equal(t, expected, closePrices)
 }
 
 func TestRenderCandlestickChart(t *testing.T) {

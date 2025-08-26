@@ -1101,7 +1101,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 			name: "pattern_combination_three_candle_patterns",
 			optGen: func() CandlestickChartOption {
 				data := []OHLCData{
-					{Open: 100, High: 110, Low: 95, Close: 105},  // Normal candle
+					{Open: 100, High: 110, Low: 95, Close: 105}, // Normal candle
 					// Morning star sequence
 					{Open: 120, High: 125, Low: 105, Close: 108}, // Large bearish
 					{Open: 102, High: 104, Low: 100, Close: 103}, // Small body, gap down

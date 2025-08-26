@@ -31,21 +31,15 @@ func main() {
 		{Open: 132.0, High: 137.0, Low: 127.0, Close: 130.0},
 	}
 
-	// Create candlestick series
-	candlestickSeries := charts.CandlestickSeries{Data: ohlcData}
-
-	// Calculate Bollinger Bands (20-period, 2 standard deviations)
-	closes := charts.ExtractClosePrices(candlestickSeries)
-	bands := charts.CalculateBollingerBands(closes, 10, 2.0) // Using 10-period for demo with shorter dataset
-
-	// Create mixed chart
-	seriesList := append(
-		charts.CandlestickSeriesList{{Data: ohlcData}}.ToGenericSeriesList(),
-		charts.NewSeriesListLine([][]float64{bands.Upper, bands.Middle, bands.Lower}).ToGenericSeriesList()...,
-	)
-
-	chartOpt := charts.ChartOption{
-		SeriesList: seriesList,
+	chartOpt := charts.CandlestickChartOption{
+		SeriesList: []charts.CandlestickSeries{{
+			Data: ohlcData,
+			TrendLine: []charts.SeriesTrendLine{
+				{Type: charts.SeriesTrendTypeBollingerUpper, Period: 10},
+				{Type: charts.SeriesTrendTypeSMA, Period: 10},           // Middle band
+				{Type: charts.SeriesTrendTypeBollingerLower, Period: 10},
+			},
+		}},
 		Title: charts.TitleOption{
 			Text: "Candlestick Chart with Bollinger Bands",
 			FontStyle: charts.FontStyle{
@@ -62,14 +56,19 @@ func main() {
 			},
 		},
 		Legend: charts.LegendOption{
-			SeriesNames: []string{"Price", "BB Upper", "BB Middle (SMA)", "BB Lower"},
-			Show:        charts.Ptr(true),
+			Show: charts.Ptr(true),
 		},
 		Padding: charts.NewBoxEqual(20),
 	}
 
-	// Render the chart
-	painter, err := charts.Render(chartOpt)
+	// Create painter and render the chart
+	painter := charts.NewPainter(charts.PainterOptions{
+		OutputFormat: charts.ChartOutputPNG,
+		Width:        800,
+		Height:       600,
+	}, charts.PainterThemeOption(charts.GetDefaultTheme()))
+
+	err := painter.CandlestickChart(chartOpt)
 	if err != nil {
 		panic(err)
 	}
