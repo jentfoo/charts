@@ -31,20 +31,23 @@ func main() {
 		{Open: 157.0, High: 162.0, Low: 154.0, Close: 159.0},
 	}
 
-	// Create candlestick series
-	candlestickSeries := charts.CandlestickSeries{Data: ohlcData}
+	// Create candlestick series with trend lines
+	candlestickSeries := charts.CandlestickSeries{
+		Data: ohlcData,
+		TrendLine: []charts.SeriesTrendLine{
+			{
+				Type:   charts.SeriesTrendTypeSMA,
+				Period: 10,
+			},
+			{
+				Type:   charts.SeriesTrendTypeEMA,
+				Period: 10,
+			},
+		},
+	}
 
-	// Calculate technical indicators
-	closes := charts.ExtractClosePrices(candlestickSeries)
-	sma10 := charts.CalculateSMA(closes, 10)
-	sma20 := charts.CalculateSMA(closes, 20)
-	ema10 := charts.CalculateEMA(closes, 10)
-
-	// Create mixed chart using generic chart option
-	seriesList := append(
-		charts.CandlestickSeriesList{{Data: ohlcData}}.ToGenericSeriesList(),
-		charts.NewSeriesListLine([][]float64{sma10, sma20, ema10}).ToGenericSeriesList()...,
-	)
+	// Create mixed chart - now using trend lines instead of separate line series
+	seriesList := charts.CandlestickSeriesList{candlestickSeries}.ToGenericSeriesList()
 
 	chartOpt := charts.ChartOption{
 		SeriesList: seriesList,

@@ -36,9 +36,9 @@ func main() {
 	opt := charts.CandlestickChartOption{
 		Theme: charts.GetTheme(charts.ThemeLight),
 		SeriesList: charts.CandlestickSeriesList{
-			{Data: stockAData, Name: "Stock A", CandleStyle: charts.CandleStyleFilled},
-			{Data: stockBData, Name: "Stock B", CandleStyle: charts.CandleStyleTraditional},
-			{Data: stockCData, Name: "Stock C", CandleStyle: charts.CandleStyleOutline},
+			charts.CandlestickSeries{Data: stockAData, Name: "Stock A", CandleStyle: charts.CandleStyleFilled},
+			charts.CandlestickSeries{Data: stockBData, Name: "Stock B", CandleStyle: charts.CandleStyleTraditional},
+			charts.CandlestickSeries{Data: stockCData, Name: "Stock C", CandleStyle: charts.CandleStyleOutline},
 		},
 		Title: charts.TitleOption{
 			Text: "Multiple Candlestick Series Comparison",

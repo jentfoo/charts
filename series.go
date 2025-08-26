@@ -2034,8 +2034,8 @@ type CandlestickSeries struct {
 	MarkPoint SeriesMarkPoint
 	// MarkLine provides a configuration for mark lines for this series.
 	MarkLine SeriesMarkLine
-	// CandleWidth specifies the width of each candlestick body as percentage of available space (0.0-1.0)
-	CandleWidth float64
+	// TrendLine provides configurations for trend lines for this series.
+	TrendLine []SeriesTrendLine
 	// ShowWicks when false hides the high-low wicks (showing only the body)
 	ShowWicks *bool
 	// CandleStyle specifies the visual style: "filled", "traditional", "outline"
@@ -2175,7 +2175,6 @@ type CandlestickSeriesOption struct {
 	Names       []string
 	MarkPoint   SeriesMarkPoint
 	MarkLine    SeriesMarkLine
-	CandleWidth float64
 	CandleStyle string
 }
 
@@ -2193,7 +2192,6 @@ func NewSeriesListCandlestick(data [][]OHLCData, opts ...CandlestickSeriesOption
 			Label:       opt.Label,
 			MarkPoint:   opt.MarkPoint,
 			MarkLine:    opt.MarkLine,
-			CandleWidth: opt.CandleWidth,
 			CandleStyle: opt.CandleStyle,
 		}
 		if index < len(opt.Names) {
@@ -2261,7 +2259,6 @@ func AggregateCandlestick(data CandlestickSeries, factor int) CandlestickSeries 
 		Name:        data.Name + " (Aggregated)",
 		MarkPoint:   data.MarkPoint,
 		MarkLine:    data.MarkLine,
-		CandleWidth: data.CandleWidth,
 		CandleStyle: data.CandleStyle,
 	}
 }
