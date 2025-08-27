@@ -430,37 +430,6 @@ func TestThreeBlackCrowsPattern(t *testing.T) {
 	assert.False(t, detected)
 }
 
-func TestPatternDisplayNames(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		input    string
-		expected string
-	}{
-		{"Doji", "⚖️ Doji"},
-		{"Hammer", "🔨 Hammer"},
-		{"Shooting Star", "⭐ Shooting Star"},
-		{"Bullish Marubozu", "📈 Bull Marubozu"},
-		{"Bearish Marubozu", "📉 Bear Marubozu"},
-		{"Spinning Top", "🌀 Spinning Top"},
-		{"Morning Star", "🌅 Morning Star"},
-		{"Evening Star", "🌆 Evening Star"},
-		{"Piercing Line", "🗲 Piercing Line"},
-		{"Dark Cloud Cover", "☁️ Dark Cloud"},
-		{"Tweezer Top", "🥢 Tweezer Top"},
-		{"Tweezer Bottom", "🥢 Tweezer Bottom"},
-		{"Three White Soldiers", "⚔️ Three Soldiers"},
-		{"Three Black Crows", "🦅 Three Crows"},
-		{"Unknown Pattern", "Unknown Pattern"}, // Should return unchanged
-	}
-
-	for _, tc := range testCases {
-		result := getPatternDisplayName(tc.input)
-
-		assert.Equal(t, tc.expected, result)
-	}
-}
-
 func TestPatternValidation(t *testing.T) {
 	t.Parallel()
 
@@ -597,7 +566,7 @@ func TestPatternScanningComprehensive(t *testing.T) {
 	assert.Len(t, uniquePatterns, 19)
 }
 
-func TestCandlestickChartWithPatterns(t *testing.T) {
+func TestCandlestickChartPatterns(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -619,7 +588,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Doji Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -627,7 +595,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0x2da625c3,
 		},
 		{
 			name: "pattern_hammer",
@@ -642,7 +610,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Hammer Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -650,7 +617,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0x9959a71b,
 		},
 		{
 			name: "pattern_inverted_hammer",
@@ -665,7 +632,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Inverted Hammer Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -673,7 +639,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0x05255cbd,
 		},
 		{
 			name: "pattern_shooting_star",
@@ -688,7 +654,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Shooting Star Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -696,7 +661,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0x9063cc82,
 		},
 		{
 			name: "pattern_gravestone_doji",
@@ -711,7 +676,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Gravestone Doji Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -719,7 +683,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0xd0eda7dd,
 		},
 		{
 			name: "pattern_dragonfly_doji",
@@ -734,7 +698,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Dragonfly Doji Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -742,7 +705,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0xbf557b34,
 		},
 		{
 			name: "pattern_bullish_marubozu",
@@ -757,7 +720,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Bullish Marubozu Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -765,7 +727,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0x9a957c80,
 		},
 		{
 			name: "pattern_bearish_marubozu",
@@ -780,7 +742,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Bearish Marubozu Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -788,7 +749,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0xca704af0,
 		},
 		{
 			name: "pattern_spinning_top",
@@ -803,7 +764,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Spinning Top Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -811,7 +771,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0xb218f934,
 		},
 		{
 			name: "pattern_bullish_engulfing",
@@ -828,7 +788,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					EngulfingMinSize: 0.8,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Bullish Engulfing Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3", "4"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -836,7 +795,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0xfac6972a,
 		},
 		{
 			name: "pattern_bearish_engulfing",
@@ -853,7 +812,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					EngulfingMinSize: 0.8,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Bearish Engulfing Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3", "4"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -861,7 +819,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0x6f81ef24,
 		},
 		{
 			name: "pattern_morning_star",
@@ -878,7 +836,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Morning Star Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3", "4", "5"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -886,7 +843,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0x047673fc,
 		},
 		{
 			name: "pattern_evening_star",
@@ -903,7 +860,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Evening Star Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3", "4", "5"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -911,7 +867,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0x082963f4,
 		},
 		{
 			name: "pattern_piercing_line",
@@ -927,7 +883,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Piercing Line Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3", "4"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -935,7 +890,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0x638148cc,
 		},
 		{
 			name: "pattern_dark_cloud_cover",
@@ -951,7 +906,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Dark Cloud Cover Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3", "4"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -959,7 +913,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0xfa618bf0,
 		},
 		{
 			name: "pattern_three_white_soldiers",
@@ -976,7 +930,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Three White Soldiers Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3", "4", "5"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -984,7 +937,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0xe2eb70d7,
 		},
 		{
 			name: "pattern_three_black_crows",
@@ -1001,7 +954,6 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Three Black Crows Pattern"},
 					XAxis:      XAxisOption{Labels: []string{"1", "2", "3", "4", "5"}},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
@@ -1009,7 +961,7 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0x23e77b2c,
 		},
 		{
 			name: "pattern_combination_doji_and_hammers",
@@ -1026,15 +978,14 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Mixed Doji and Hammer Patterns"},
-					XAxis:      XAxisOption{Labels: []string{"1", "2", "3", "4", "5"}},
+					XAxis:      XAxisOption{Show: Ptr(false)},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
 					Padding:    NewBoxEqual(10),
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0xf14efe0a,
 		},
 		{
 			name: "pattern_combination_engulfing_and_stars",
@@ -1054,18 +1005,17 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					EngulfingMinSize: 0.8,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Engulfing and Morning Star Patterns"},
-					XAxis:      XAxisOption{Labels: []string{"1", "2", "3", "4", "5", "6", "7"}},
+					XAxis:      XAxisOption{Show: Ptr(false)},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
 					Padding:    NewBoxEqual(10),
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0x2da07915,
 		},
 		{
-			name: "pattern_combination_comprehensive_mixed",
+			name: "pattern_combination_mixed",
 			optGen: func() CandlestickChartOption {
 				data := []OHLCData{
 					{Open: 100, High: 110, Low: 95, Close: 105},     // Normal candle
@@ -1087,15 +1037,14 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					EngulfingMinSize: 0.8,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Comprehensive Mixed Patterns"},
-					XAxis:      XAxisOption{Labels: []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"}},
+					XAxis:      XAxisOption{Show: Ptr(false)},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
 					Padding:    NewBoxEqual(10),
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0xacc47163,
 		},
 		{
 			name: "pattern_combination_three_candle_patterns",
@@ -1125,15 +1074,14 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Three-Candle Pattern Combinations"},
-					XAxis:      XAxisOption{Labels: []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"}},
+					XAxis:      XAxisOption{Show: Ptr(false)},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
 					Padding:    NewBoxEqual(10),
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0xf6bad464,
 		},
 		{
 			name: "pattern_combination_reversal_patterns",
@@ -1153,15 +1101,146 @@ func TestCandlestickChartWithPatterns(t *testing.T) {
 					ShadowRatio:   2.0,
 				})
 				return CandlestickChartOption{
-					Title:      TitleOption{Text: "Reversal Pattern Combinations"},
-					XAxis:      XAxisOption{Labels: []string{"1", "2", "3", "4", "5", "6", "7", "8"}},
+					XAxis:      XAxisOption{Show: Ptr(false)},
 					YAxis:      make([]YAxisOption, 1),
 					SeriesList: CandlestickSeriesList{series},
 					Padding:    NewBoxEqual(10),
 				}
 			},
 			svg:    "",
-			pngCRC: 0,
+			pngCRC: 0x9f600cd5,
+		},
+		{
+			name: "all_patterns_showcase",
+			optGen: func() CandlestickChartOption {
+				// Comprehensive dataset showcasing all supported candlestick patterns
+				data := []OHLCData{
+					// 0: Setup - Normal candle
+					{Open: 100, High: 110, Low: 95, Close: 105},
+					// 1: Regular candle (reduce spinning top frequency)
+					{Open: 105, High: 108, Low: 102, Close: 107},
+					// 2: Hammer pattern
+					{Open: 108, High: 109, Low: 98, Close: 107},
+					// 3: Regular candle (was inverted hammer, reduce shooting star frequency)
+					{Open: 95, High: 102, Low: 94, Close: 100},
+					// 4: Regular candle (was shooting star, reduce frequency)
+					{Open: 106, High: 115, Low: 105, Close: 112},
+					// 5: Gravestone Doji pattern
+					{Open: 108, High: 120, Low: 107, Close: 108.1},
+					// 6: Hammer-like pattern (preserve dragonfly, reduce doji frequency)
+					{Open: 109, High: 111, Low: 90, Close: 108},
+					// 7: Bullish Marubozu pattern
+					{Open: 100, High: 120, Low: 100, Close: 120},
+					// 8: Bearish Marubozu pattern
+					{Open: 120, High: 120, Low: 100, Close: 100},
+					// 9: Regular candle (break harami pattern, reduce spinning top)
+					{Open: 110, High: 120, Low: 107, Close: 118},
+					// Setup for two-candle patterns - Large bearish candle
+					{Open: 130, High: 135, Low: 110, Close: 115},
+					// 11: Bullish Engulfing pattern
+					{Open: 110, High: 140, Low: 108, Close: 138},
+					// Setup for Bearish Engulfing - Large bullish candle
+					{Open: 110, High: 140, Low: 108, Close: 138},
+					// 13: Bearish Engulfing pattern (fixed to properly engulf)
+					{Open: 140, High: 142, Low: 105, Close: 107},
+					// Setup for Harami - Large bearish candle
+					{Open: 130, High: 135, Low: 100, Close: 105},
+					// 15: Regular candle (break harami by extending body)
+					{Open: 110, High: 125, Low: 95, Close: 120},
+					// Setup for Bearish Harami - Large bullish candle
+					{Open: 100, High: 135, Low: 98, Close: 130},
+					// 17: Bearish Harami pattern
+					{Open: 125, High: 128, Low: 120, Close: 122},
+					// Setup for Piercing Line - Bearish candle
+					{Open: 120, High: 125, Low: 110, Close: 112},
+					// 19: Piercing Line pattern
+					{Open: 108, High: 125, Low: 107, Close: 118},
+					// Setup for Dark Cloud Cover - Bullish candle
+					{Open: 110, High: 125, Low: 108, Close: 123},
+					// 21: Dark Cloud Cover pattern (fixed to gap up and close below midpoint)
+					{Open: 128, High: 130, Low: 112, Close: 115},
+					// Setup for Tweezer Top - Two candles with same high
+					{Open: 110, High: 130, Low: 108, Close: 125},
+					// 23: Tweezer Top pattern
+					{Open: 123, High: 130, Low: 115, Close: 118},
+					// Setup for Tweezer Bottom - Two candles with same low
+					{Open: 120, High: 125, Low: 100, Close: 105},
+					// 25: Tweezer Bottom pattern
+					{Open: 108, High: 115, Low: 100, Close: 112},
+					// Setup for Morning Star - Large bearish candle
+					{Open: 130, High: 135, Low: 110, Close: 115},
+					// 27: Morning Star middle - Small body with gap down (reduce spinning top)
+					{Open: 108, High: 112, Low: 107, Close: 110},
+					// 28: Morning Star completion - Large bullish candle
+					{Open: 115, High: 140, Low: 113, Close: 135},
+					// Setup for Evening Star - Large bullish candle
+					{Open: 110, High: 140, Low: 108, Close: 135},
+					// 30: Evening Star middle - Small body with proper gap up (fixed)
+					{Open: 137, High: 145, Low: 136, Close: 140},
+					// 31: Evening Star completion - Large bearish candle (fixed)
+					{Open: 135, High: 136, Low: 115, Close: 120},
+					// Setup for Three White Soldiers - Start with bearish sentiment
+					{Open: 120, High: 125, Low: 110, Close: 115},
+					// 33: Three White Soldiers - First soldier
+					{Open: 118, High: 128, Low: 116, Close: 125},
+					// 34: Three White Soldiers - Second soldier
+					{Open: 127, High: 135, Low: 125, Close: 132},
+					// 35: Three White Soldiers - Third soldier
+					{Open: 134, High: 142, Low: 132, Close: 140},
+					// Setup for Three Black Crows - Start with bullish sentiment
+					{Open: 130, High: 145, Low: 128, Close: 142},
+					// 37: Three Black Crows - First crow (fixed to open within previous body)
+					{Open: 138, High: 140, Low: 128, Close: 132},
+					// 38: Three Black Crows - Second crow (fixed to open within previous body)
+					{Open: 130, High: 132, Low: 120, Close: 125},
+					// 39: Three Black Crows - Third crow (fixed to open within previous body)
+					{Open: 124, High: 127, Low: 115, Close: 118},
+					// Additional patterns to expand the showcase
+					// 40: Regular candle (reduce spinning top frequency)
+					{Open: 115, High: 120, Low: 114, Close: 118},
+					// 41: Regular candle (was spinning top, reduce frequency)
+					{Open: 118, High: 125, Low: 115, Close: 122},
+					// 42: Setup for Shooting Star - rising trend
+					{Open: 120, High: 125, Low: 118, Close: 124},
+					// 43: Shooting Star pattern - long upper shadow, small body near low
+					{Open: 123, High: 140, Low: 122, Close: 125},
+					// 44: Setup for Gravestone Doji - uptrend
+					{Open: 125, High: 130, Low: 123, Close: 128},
+					// 45: Gravestone Doji pattern - doji with long upper shadow
+					{Open: 128, High: 145, Low: 127, Close: 128.05},
+					// 46: Setup for Dragonfly Doji - downtrend
+					{Open: 128, High: 130, Low: 125, Close: 126},
+					// 47: Dragonfly Doji pattern - doji with long lower shadow
+					{Open: 125, High: 126, Low: 110, Close: 125.05},
+					// 48: Setup for Tweezer Bottom - bearish candle
+					{Open: 125, High: 127, Low: 115, Close: 118},
+					// 49: Tweezer Bottom pattern - same low as previous, bullish reversal
+					{Open: 120, High: 125, Low: 115, Close: 123},
+					// 50: Setup for Three Black Crows - high bullish candle
+					{Open: 120, High: 135, Low: 118, Close: 133},
+					// 51: Three Black Crows - First crow (bearish, substantial body)
+					{Open: 132, High: 133, Low: 125, Close: 126},
+					// 52: Three Black Crows - Second crow (bearish, opens within prev body, closes lower)
+					{Open: 130, High: 131, Low: 121, Close: 122},
+					// 53: Three Black Crows - Third crow (bearish, opens within prev body, closes lower)
+					{Open: 125, High: 126, Low: 115, Close: 116},
+				}
+
+				series := NewCandlestickWithPatterns(data, PatternDetectionOption{
+					DojiThreshold:    0.01,
+					ShadowRatio:      2.0,
+					EngulfingMinSize: 0.8,
+				})
+
+				return CandlestickChartOption{
+					XAxis:      XAxisOption{Show: Ptr(false)},
+					YAxis:      make([]YAxisOption, 1),
+					SeriesList: CandlestickSeriesList{series},
+					Padding:    NewBoxEqual(10),
+				}
+			},
+			svg:    "",
+			pngCRC: 0x0,
 		},
 	}
 

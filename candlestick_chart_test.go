@@ -61,11 +61,13 @@ func TestCandlestickChart(t *testing.T) {
 			name:        "basic",
 			makeOptions: makeBasicCandlestickChartOption,
 			svg:         "",
+			pngCRC:      0x3134c862,
 		},
 		{
 			name:        "minimal",
 			makeOptions: makeMinimalCandlestickChartOption,
 			svg:         "",
+			pngCRC:      0x25f686e9,
 		},
 		{
 			name: "traditional",
@@ -74,7 +76,8 @@ func TestCandlestickChart(t *testing.T) {
 				opt.SeriesList[0].CandleStyle = CandleStyleTraditional
 				return opt
 			},
-			svg: "",
+			svg:    "",
+			pngCRC: 0x144bb8b8,
 		},
 		{
 			name: "outline",
@@ -83,7 +86,8 @@ func TestCandlestickChart(t *testing.T) {
 				opt.SeriesList[0].CandleStyle = CandleStyleOutline
 				return opt
 			},
-			svg: "",
+			svg:    "",
+			pngCRC: 0xbc4ef282,
 		},
 		{
 			name: "no_wicks",
@@ -92,7 +96,8 @@ func TestCandlestickChart(t *testing.T) {
 				opt.SeriesList[0].ShowWicks = Ptr(false)
 				return opt
 			},
-			svg: "",
+			svg:    "",
+			pngCRC: 0x551d01e0,
 		},
 		{
 			name: "custom_style",
@@ -103,7 +108,8 @@ func TestCandlestickChart(t *testing.T) {
 				// Colors now handled by theme
 				return opt
 			},
-			svg: "",
+			svg:    "",
+			pngCRC: 0x6f03dc99,
 		},
 		{
 			name: "marks",
@@ -116,7 +122,8 @@ func TestCandlestickChart(t *testing.T) {
 				opt.SeriesList[0].MarkPoint.ValueFormatter = func(f float64) string { return fmt.Sprintf("%.2f", f) }
 				return opt
 			},
-			svg: "",
+			svg:    "",
+			pngCRC: 0xf6f4e96b,
 		},
 		{
 			name: "doji",
@@ -129,7 +136,8 @@ func TestCandlestickChart(t *testing.T) {
 				opt.SeriesList[0] = CandlestickSeries{Data: data}
 				return opt
 			},
-			svg: "",
+			svg:    "",
+			pngCRC: 0x7e91ffdb,
 		},
 		{
 			name: "dual_axis",
@@ -139,7 +147,8 @@ func TestCandlestickChart(t *testing.T) {
 				opt.SeriesList[0].YAxisIndex = 1
 				return opt
 			},
-			svg: "",
+			svg:    "",
+			pngCRC: 0xb75aac40,
 		},
 		{
 			name: "filled_style",
@@ -148,7 +157,8 @@ func TestCandlestickChart(t *testing.T) {
 				opt.SeriesList[0].CandleStyle = CandleStyleFilled
 				return opt
 			},
-			svg: "",
+			svg:    "",
+			pngCRC: 0x3134c862,
 		},
 		{
 			name: "with_trend_lines",
@@ -160,7 +170,8 @@ func TestCandlestickChart(t *testing.T) {
 				}
 				return opt
 			},
-			svg: "",
+			svg:    "",
+			pngCRC: 0x0,
 		},
 		{
 			name: "with_mark_lines",
@@ -187,7 +198,8 @@ func TestCandlestickChart(t *testing.T) {
 					SeriesList: CandlestickSeriesList{series},
 				}
 			},
-			svg: "",
+			svg:    "",
+			pngCRC: 0x932ec90d,
 		},
 		{
 			name: "large_dataset",
@@ -215,7 +227,7 @@ func TestCandlestickChart(t *testing.T) {
 					SeriesList: CandlestickSeriesList{{Data: data}},
 				}
 			},
-			svg: "",
+			svg: "", pngCRC: 0x2e9e4d1d,
 		},
 		{
 			name: "multiple_series",
@@ -260,7 +272,7 @@ func TestCandlestickChart(t *testing.T) {
 					Padding: NewBoxEqual(10),
 				}
 			},
-			svg: "",
+			svg: "", pngCRC: 0x198bb362,
 		},
 		{
 			name: "with_sma",
@@ -276,7 +288,7 @@ func TestCandlestickChart(t *testing.T) {
 				opt.Title.Text = "SMA Line Chart"
 				return opt
 			},
-			svg: "",
+			svg: "", pngCRC: 0xb7421aaa,
 		},
 		{
 			name: "with_bollinger_bands",
@@ -315,7 +327,8 @@ func TestCandlestickChart(t *testing.T) {
 					Padding: NewBoxEqual(10),
 				}
 			},
-			svg: "",
+			svg:    "",
+			pngCRC: 0x0,
 		},
 		{
 			name: "with_ema",
@@ -340,7 +353,7 @@ func TestCandlestickChart(t *testing.T) {
 					Padding: NewBoxEqual(10),
 				}
 			},
-			svg: "",
+			svg: "", pngCRC: 0x3bf07859,
 		},
 		{
 			name: "with_rsi",
@@ -365,7 +378,7 @@ func TestCandlestickChart(t *testing.T) {
 					Padding: NewBoxEqual(10),
 				}
 			},
-			svg: "",
+			svg: "", pngCRC: 0x0,
 		},
 		{
 			name: "aggregation",
@@ -395,7 +408,7 @@ func TestCandlestickChart(t *testing.T) {
 					SeriesList: CandlestickSeriesList{aggregated},
 				}
 			},
-			svg: "",
+			svg: "", pngCRC: 0xecc6e716,
 		},
 		{
 			name: "large_series_count",
@@ -447,7 +460,7 @@ func TestCandlestickChart(t *testing.T) {
 					Padding: NewBoxEqual(10),
 				}
 			},
-			svg: "",
+			svg: "", pngCRC: 0x22b8b870,
 		},
 		{
 			name: "multiple_series_different_styles",
@@ -490,7 +503,79 @@ func TestCandlestickChart(t *testing.T) {
 					Padding: NewBoxEqual(10),
 				}
 			},
-			svg: "",
+			svg: "", pngCRC: 0xdd278230,
+		},
+		{
+			name: "candle_margin_zero",
+			makeOptions: func() CandlestickChartOption {
+				// Create multiple series with similar price ranges to show candlesticks side-by-side
+				series1Data := []OHLCData{
+					{Open: 100.0, High: 110.0, Low: 95.0, Close: 105.0},
+					{Open: 105.0, High: 115.0, Low: 100.0, Close: 112.0},
+					{Open: 112.0, High: 118.0, Low: 108.0, Close: 115.0},
+				}
+
+				series2Data := []OHLCData{
+					{Open: 102.0, High: 112.0, Low: 97.0, Close: 107.0},
+					{Open: 107.0, High: 117.0, Low: 102.0, Close: 114.0},
+					{Open: 114.0, High: 120.0, Low: 110.0, Close: 117.0},
+				}
+
+				return CandlestickChartOption{
+					Title: TitleOption{Text: "Zero Candle Margin"},
+					XAxis: XAxisOption{
+						Labels: []string{"Day 1", "Day 2", "Day 3"},
+					},
+					YAxis: make([]YAxisOption, 1),
+					SeriesList: CandlestickSeriesList{
+						{Data: series1Data, Name: "Stock A"},
+						{Data: series2Data, Name: "Stock B"},
+					},
+					CandleMargin: Ptr(0.0),
+					Legend: LegendOption{
+						SeriesNames: []string{"Stock A", "Stock B"},
+						Show:        Ptr(true),
+					},
+					Padding: NewBoxEqual(10),
+				}
+			},
+			svg: "", pngCRC: 0x0, // Will need to be updated after running
+		},
+		{
+			name: "candle_margin_small",
+			makeOptions: func() CandlestickChartOption {
+				// Create multiple series with similar price ranges to show candlesticks side-by-side
+				series1Data := []OHLCData{
+					{Open: 100.0, High: 110.0, Low: 95.0, Close: 105.0},
+					{Open: 105.0, High: 115.0, Low: 100.0, Close: 112.0},
+					{Open: 112.0, High: 118.0, Low: 108.0, Close: 115.0},
+				}
+
+				series2Data := []OHLCData{
+					{Open: 102.0, High: 112.0, Low: 97.0, Close: 107.0},
+					{Open: 107.0, High: 117.0, Low: 102.0, Close: 114.0},
+					{Open: 114.0, High: 120.0, Low: 110.0, Close: 117.0},
+				}
+
+				return CandlestickChartOption{
+					Title: TitleOption{Text: "Small Candle Margin"},
+					XAxis: XAxisOption{
+						Labels: []string{"Day 1", "Day 2", "Day 3"},
+					},
+					YAxis: make([]YAxisOption, 1),
+					SeriesList: CandlestickSeriesList{
+						{Data: series1Data, Name: "Stock A"},
+						{Data: series2Data, Name: "Stock B"},
+					},
+					CandleMargin: Ptr(0.05), // 5% margin between candlesticks
+					Legend: LegendOption{
+						SeriesNames: []string{"Stock A", "Stock B"},
+						Show:        Ptr(true),
+					},
+					Padding: NewBoxEqual(10),
+				}
+			},
+			svg: "", pngCRC: 0x0, // Will need to be updated after running
 		},
 	}
 

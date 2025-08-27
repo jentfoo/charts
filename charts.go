@@ -547,7 +547,7 @@ func Render(opt ChartOption, opts ...OptionFunc) (*Painter, error) {
 				XAxis:          opt.XAxis,
 				YAxis:          opt.YAxis,
 				SeriesList:     candlestickSeries,
-				CandleWidth:    0.8, // Could be configurable in ChartOption
+				CandleWidth:    0.8, // TODO - v0.6 - Use BarSize when it represents a percentage
 				WickWidth:      1.0,
 				ValueFormatter: opt.ValueFormatter,
 			}).renderChart(renderResult)

@@ -36,7 +36,7 @@ func main() {
 			Data: ohlcData,
 			TrendLine: []charts.SeriesTrendLine{
 				{Type: charts.SeriesTrendTypeBollingerUpper, Period: 10},
-				{Type: charts.SeriesTrendTypeSMA, Period: 10},           // Middle band
+				{Type: charts.SeriesTrendTypeSMA, Period: 10}, // Middle band
 				{Type: charts.SeriesTrendTypeBollingerLower, Period: 10},
 			},
 		}},
