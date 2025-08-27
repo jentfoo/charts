@@ -5,6 +5,41 @@ import (
 	"math"
 )
 
+// TODO - v0.6 - attempt to de-duplicate with calculateBarMarginsAndSize
+// calculateCandleMarginsAndSize calculates margins and candle sizes similar to bar charts.
+func calculateCandleMarginsAndSize(seriesCount, space int, configuredCandleSize int, configuredCandleMargin *float64) (int, int, int) {
+	// default margins, adjusted below with config and series count
+	margin := 10      // margin between each series group
+	candleMargin := 5 // margin between each candle
+	if space < 20 {
+		margin = 2
+		candleMargin = 2
+	} else if space < 50 {
+		margin = 5
+		candleMargin = 3
+	}
+	// check margin configuration if candle size allows margin
+	if configuredCandleSize+candleMargin < space/seriesCount {
+		// CandleWidth is in range that we should also consider an optional margin configuration
+		if configuredCandleMargin != nil {
+			candleMargin = int(math.Round(*configuredCandleMargin))
+			if candleMargin+configuredCandleSize > space/seriesCount {
+				candleMargin = (space / seriesCount) - configuredCandleSize
+			}
+		}
+	} // else, candle width is out of range.  Ignore margin config
+
+	candleSize := (space - 2*margin - candleMargin*(seriesCount-1)) / seriesCount
+	// check candle size configuration, limited by the series count and space available
+	if configuredCandleSize > 0 && configuredCandleSize < candleSize {
+		candleSize = configuredCandleSize
+		// recalculate margin
+		margin = (space - seriesCount*candleSize - candleMargin*(seriesCount-1)) / 2
+	}
+
+	return margin, candleMargin, candleSize
+}
+
 type candlestickChart struct {
 	p   *Painter
 	opt *CandlestickChartOption
@@ -41,6 +76,8 @@ type CandlestickChartOption struct {
 	ShowWicks *bool
 	// WickWidth is the stroke width for high-low wicks in pixels.
 	WickWidth float64
+	// CandleMargin specifies the margin between candlesticks as a ratio (0.0-1.0).
+	CandleMargin *float64
 	// ValueFormatter defines how float values are rendered to strings, notably for numeric axis labels.
 	ValueFormatter ValueFormatter
 }
@@ -119,8 +156,8 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 		candleWidth = 1
 	}
 
-	// Use bar chart margin calculation for consistency
-	margin, candleMargin, candleWidthPerSeries := calculateBarMarginsAndSize(seriesCount, width, candleWidth, nil)
+	// Calculate candleWidthPerSeries for body rendering
+	candleWidthPerSeries := candleWidth / seriesCount
 	if candleWidthPerSeries < 1 {
 		candleWidthPerSeries = 1
 	}
@@ -128,27 +165,20 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 	// Use autoDivide for positioning
 	divideValues := result.xaxisRange.autoDivide()
 
+	// Calculate proper xValues for trendlines (similar to line/scatter charts)
+	xValues := boundaryGapAxisPositions(seriesPainter.Width(), false, maxDataCount)
+
 	// render list must start with the markPointPainter, as it can influence label painters (if enabled)
 	markPointPainter := newMarkPointPainter(seriesPainter)
 	markLinePainter := newMarkLinePainter(seriesPainter)
 	trendLinePainter := newTrendLinePainter(seriesPainter)
 	rendererList := []renderer{markPointPainter, markLinePainter, trendLinePainter}
 
-	// Check if any series has labels enabled
 	seriesNames := seriesList.names()
-	var labelPainter *seriesLabelPainter
-	for seriesIndex := 0; seriesIndex < seriesList.len(); seriesIndex++ {
-		series := seriesList.getSeries(seriesIndex).(*CandlestickSeries)
-		if flagIs(true, series.Label.Show) {
-			labelPainter = newSeriesLabelPainter(seriesPainter, seriesNames, series.Label,
-				opt.Theme, opt.Padding.Right)
-			rendererList = append(rendererList, labelPainter)
-			break
-		}
-	}
 
-	// Store points for each series (for mark points)
+	// Store points and label painters for each series
 	allSeriesPoints := make([][]Point, seriesList.len())
+	allLabelPainters := make([]*seriesLabelPainter, seriesList.len())
 
 	// Render each series
 	for seriesIndex := 0; seriesIndex < seriesList.len(); seriesIndex++ {
@@ -159,6 +189,15 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 			return BoxZero, errors.New("candlestick series YAxisIndex out of bounds")
 		}
 		yRange := result.yaxisRanges[series.YAxisIndex]
+
+		// Create labelPainter for this series if labels are enabled
+		var labelPainter *seriesLabelPainter
+		if flagIs(true, series.Label.Show) {
+			labelPainter = newSeriesLabelPainter(seriesPainter, seriesNames, series.Label,
+				opt.Theme, opt.Padding.Right)
+			rendererList = append(rendererList, labelPainter)
+		}
+		allLabelPainters[seriesIndex] = labelPainter
 
 		// Get series-specific up/down colors
 		upColor, downColor := opt.Theme.GetSeriesUpDownColors(seriesIndex)
@@ -184,10 +223,57 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 				continue
 			}
 
-			// Position calculation similar to bar chart logic
-			centerX := divideValues[j] + margin + seriesIndex*(candleWidthPerSeries+candleMargin)
-			leftX := centerX - candleWidthPerSeries/2
-			rightX := centerX + candleWidthPerSeries/2
+			// Position calculation: center candlesticks in each time period
+			// Calculate the center of each time period section
+			var sectionWidth int
+			if j < len(divideValues)-1 {
+				sectionWidth = divideValues[j+1] - divideValues[j]
+			} else {
+				// Last section uses same width as previous
+				if j > 0 {
+					sectionWidth = divideValues[j] - divideValues[j-1]
+				} else {
+					sectionWidth = seriesPainter.Width() / maxDataCount
+				}
+			}
+
+			// Calculate margins and positioning exactly like bar charts
+			var groupMargin, candleMargin, candleWidth int
+
+			if seriesList.len() == 1 {
+				// Single series: use simple centering
+				groupMargin = 0
+				candleMargin = 0
+				candleWidth = candleWidthPerSeries
+			} else {
+				// Multiple series: use bar chart margin calculation logic
+				// Convert CandleMargin percentage to pixels
+				var candleMarginFloat *float64
+				if opt.CandleMargin != nil {
+					// Convert percentage to absolute pixels
+					marginPixels := float64(sectionWidth) * (*opt.CandleMargin)
+					candleMarginFloat = &marginPixels
+				}
+
+				// Use bar chart logic: calculateBarMarginsAndSize equivalent
+				groupMargin, candleMargin, candleWidth =
+					calculateCandleMarginsAndSize(seriesList.len(),
+						sectionWidth, candleWidthPerSeries, candleMarginFloat)
+			}
+
+			var centerX int
+			if seriesList.len() == 1 {
+				// Single series: center in the time period section
+				centerX = divideValues[j] + sectionWidth/2
+			} else {
+				// Multiple series: use exact bar chart positioning formula
+				// x = divideValues[j] + margin + index*(barWidth+barMargin)
+				x := divideValues[j] + groupMargin + seriesIndex*(candleWidth+candleMargin)
+				centerX = x + candleWidth/2
+			}
+
+			leftX := centerX - candleWidth/2
+			rightX := centerX + candleWidth/2
 
 			highY := yRange.getRestHeight(ohlc.High)
 			lowY := yRange.getRestHeight(ohlc.Low)
@@ -299,12 +385,35 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 
 			// Add label if enabled
 			if labelPainter != nil {
+				// Set up font style similar to bar chart
+				fontStyle := series.Label.FontStyle
+				if fontStyle.FontColor.IsZero() {
+					// Determine appropriate label color based on candlestick color
+					var testColor Color
+					if isBullish {
+						testColor = upColor
+					} else {
+						testColor = downColor
+					}
+					if !testColor.IsZero() {
+						if isLightColor(testColor) {
+							fontStyle.FontColor = defaultLightFontColor
+						} else {
+							fontStyle.FontColor = defaultDarkFontColor
+						}
+					}
+				}
+				if fontStyle.Font == nil {
+					fontStyle.Font = getPreferredFont(series.Label.FontStyle.Font)
+				}
+
 				labelPainter.Add(labelValue{
-					index:     seriesIndex,
+					index:     j,          // Data point index (candlestick position), not series index
 					value:     ohlc.Close, // Use close price for label
 					x:         centerX,
 					y:         closeY,
-					fontStyle: series.Label.FontStyle,
+					fontStyle: fontStyle,
+					offset:    series.Label.Offset,
 				})
 			}
 		}
@@ -313,6 +422,11 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 	// Handle mark lines for each series
 	for seriesIndex := 0; seriesIndex < seriesList.len(); seriesIndex++ {
 		series := seriesList.getSeries(seriesIndex).(*CandlestickSeries)
+
+		// Bounds check for Y axis index to prevent panic
+		if series.YAxisIndex >= len(result.yaxisRanges) {
+			continue // Skip this series if YAxisIndex is out of bounds
+		}
 		yRange := result.yaxisRanges[series.YAxisIndex]
 
 		if len(series.MarkLine.Lines) > 0 {
@@ -359,7 +473,7 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 					markpoints:         seriesMarks,
 					seriesValues:       closeValues,
 					valueFormatter:     markPointValueFormatter,
-					seriesLabelPainter: labelPainter,
+					seriesLabelPainter: allLabelPainters[seriesIndex],
 				})
 			}
 		}
@@ -368,6 +482,11 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 	// Handle trend lines for each series
 	for seriesIndex := 0; seriesIndex < seriesList.len(); seriesIndex++ {
 		series := seriesList.getSeries(seriesIndex).(*CandlestickSeries)
+
+		// Bounds check for Y axis index to prevent panic
+		if series.YAxisIndex >= len(result.yaxisRanges) {
+			continue // Skip this series if YAxisIndex is out of bounds
+		}
 		yRange := result.yaxisRanges[series.YAxisIndex]
 
 		if len(series.TrendLine) > 0 {
@@ -375,10 +494,11 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 			closeValues := ExtractClosePrices(*series)
 			trendLinePainter.add(trendLineRenderOption{
 				defaultStrokeColor: opt.Theme.GetSeriesTrendColor(seriesIndex),
-				xValues:            divideValues,
+				xValues:            xValues,
 				seriesValues:       closeValues,
 				axisRange:          yRange,
 				trends:             series.TrendLine,
+				dashed:             false, // Default for candlestick charts
 			})
 		}
 	}
@@ -395,9 +515,7 @@ func (k *candlestickChart) Render() (Box, error) {
 	if opt.Theme == nil {
 		opt.Theme = getPreferredTheme(p.theme)
 	}
-	if opt.Legend.Symbol == "" {
-		opt.Legend.Symbol = SymbolSquare
-	}
+	opt.Legend.Symbol = symbolCandlestick
 
 	renderResult, err := defaultRender(p, defaultRenderOption{
 		theme:          opt.Theme,

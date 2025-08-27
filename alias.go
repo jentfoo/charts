@@ -206,9 +206,10 @@ const (
 type Symbol string
 
 const (
-	SymbolNone    = "none"
-	SymbolCircle  = "circle"
-	SymbolDot     = "dot"
-	SymbolSquare  = "square"
-	SymbolDiamond = "diamond"
+	SymbolNone        = "none"
+	SymbolCircle      = "circle"
+	SymbolDot         = "dot"
+	SymbolSquare      = "square"
+	SymbolDiamond     = "diamond"
+	symbolCandlestick = "candlestick" // internal only, set automatically
 )

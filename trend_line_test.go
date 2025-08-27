@@ -133,7 +133,7 @@ func TestTrendLine(t *testing.T) {
 				}
 				return p.Bytes()
 			},
-			result: "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"0 0 600 400\"><path  d=\"M 70 320\nL 170 258\nL 270 219\nL 370 161\nL 470 103\nL 570 64\" style=\"stroke-width:2;stroke:black;fill:none\"/></svg>",
+			result: "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"0 0 600 400\"><path  d=\"M 70 308\nL 170 272\nL 270 218\nL 370 155\nL 470 88\nL 570 20\" style=\"stroke-width:2;stroke:black;fill:none\"/></svg>",
 		},
 		{
 			name: "bollinger_upper",
@@ -157,7 +157,7 @@ func TestTrendLine(t *testing.T) {
 				}
 				return p.Bytes()
 			},
-			result: "",
+			result: "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"0 0 600 400\"><path  d=\"M 70 380\nL 170 380\nL 270 250\nL 370 214\nL 470 178\nL 570 142\" style=\"stroke-width:2;stroke:black;fill:none\"/></svg>",
 		},
 		{
 			name: "bollinger_lower",
@@ -181,7 +181,7 @@ func TestTrendLine(t *testing.T) {
 				}
 				return p.Bytes()
 			},
-			result: "",
+			result: "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"0 0 600 400\"><path  d=\"M 70 380\nL 170 380\nL 270 367\nL 370 331\nL 470 295\nL 570 259\" style=\"stroke-width:2;stroke:black;fill:none\"/></svg>",
 		},
 		{
 			name: "rsi",
@@ -205,7 +205,7 @@ func TestTrendLine(t *testing.T) {
 				}
 				return p.Bytes()
 			},
-			result: "",
+			result: "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"0 0 600 400\"><path  d=\"M 70 380\nL 170 380\nL 270 380\nL 370 178\nL 470 143\nL 570 238\" style=\"stroke-width:2;stroke:black;fill:none\"/></svg>",
 		},
 	}
 

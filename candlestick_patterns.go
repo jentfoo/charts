@@ -2,6 +2,7 @@ package charts
 
 import (
 	"math"
+	"strings"
 )
 
 // Candlestick pattern constants
@@ -853,15 +854,12 @@ func CreatePatternLabelFormatter(series CandlestickSeries, options ...PatternDet
 
 	return func(index int, name string, val float64) (string, *LabelStyle) {
 		if patternNames, found := patternMap[index]; found {
-			// Join multiple pattern names with a comma
-			// Get pattern name with emoji
-			var displayName string
-			if len(patternNames) == 1 {
-				displayName = getPatternDisplayName(patternNames[0])
-			} else {
-				// For multiple patterns, show first one with emoji
-				displayName = getPatternDisplayName(patternNames[0])
+			// Join multiple pattern names with newlines for better readability
+			var displayNames []string
+			for _, patternName := range patternNames {
+				displayNames = append(displayNames, getPatternDisplayName(patternName))
 			}
+			displayName := strings.Join(displayNames, "\n")
 
 			return displayName, &LabelStyle{
 				FontStyle: FontStyle{
@@ -891,22 +889,35 @@ func CreatePatternLabelFormatterWithColors(series CandlestickSeries, bullishColo
 
 	return func(index int, name string, val float64) (string, *LabelStyle) {
 		if patternsAtIndex, found := patternMap[index]; found {
-			// Use the first pattern for display (we could implement priority logic here)
-			pattern := patternsAtIndex[0]
+			// Build display names for all patterns and determine predominant color
+			var displayNames []string
+			var bullishCount, bearishCount, neutralCount int
 
-			// Determine color based on pattern type
+			for _, pattern := range patternsAtIndex {
+				displayNames = append(displayNames, getPatternDisplayName(pattern.PatternName))
+
+				// Count pattern types to determine predominant color
+				switch pattern.PatternType {
+				case PatternHammer, PatternMorningStar, PatternEngulfingBull, PatternDragonfly, PatternMarubozuBull, PatternPiercingLine, PatternTweezerBottom, PatternThreeWhiteSoldiers:
+					bullishCount++
+				case PatternShootingStar, PatternEveningStar, PatternEngulfingBear, PatternGravestone, PatternMarubozuBear, PatternDarkCloudCover, PatternTweezerTop, PatternThreeBlackCrows:
+					bearishCount++
+				default: // Doji, spinning top and other neutral patterns
+					neutralCount++
+				}
+			}
+
+			// Determine color based on predominant pattern type
 			var color Color
-			switch pattern.PatternType {
-			case PatternHammer, PatternMorningStar, PatternEngulfingBull, PatternDragonfly, PatternMarubozuBull, PatternPiercingLine, PatternTweezerBottom, PatternThreeWhiteSoldiers:
+			if bullishCount > bearishCount && bullishCount > neutralCount {
 				color = bullishColor
-			case PatternShootingStar, PatternEveningStar, PatternEngulfingBear, PatternGravestone, PatternMarubozuBear, PatternDarkCloudCover, PatternTweezerTop, PatternThreeBlackCrows:
+			} else if bearishCount > bullishCount && bearishCount > neutralCount {
 				color = bearishColor
-			default: // Doji, spinning top and other neutral patterns
+			} else {
 				color = neutralColor
 			}
 
-			// Get display name with emoji
-			displayName := getPatternDisplayName(pattern.PatternName)
+			displayName := strings.Join(displayNames, "\n")
 
 			return displayName, &LabelStyle{
 				FontStyle: FontStyle{
@@ -943,51 +954,89 @@ func NewCandlestickWithPatterns(data []OHLCData, options ...PatternDetectionOpti
 	return series
 }
 
-// getPatternDisplayName returns the pattern name with appropriate emoji/symbol
+// getPatternDisplayName returns the pattern name with appropriate symbol.
 func getPatternDisplayName(patternName string) string {
 	switch patternName {
 	case "Doji":
-		return "⚖️ Doji"
+		// Current: ± (plus-minus, balance symbol)
+		// Alternatives: ≈ (approximately equal), • (bullet), ∏ (product)
+		return "± Doji"
 	case "Hammer":
-		return "🔨 Hammer"
+		// Current: Γ (Greek gamma, hammer shape)
+		// Alternatives: Τ (Greek tau), τ (small tau), Γ (gamma)
+		return "Γ Hammer"
 	case "Inverted Hammer":
-		return "🔨 Inv. Hammer"
+		// Current: Ʇ (turned T, upside-down hammer)
+		return "Ʇ Inv. Hammer"
 	case "Shooting Star":
-		return "⭐ Shooting Star"
+		// Current: ※ (reference mark, star-like)
+		// Alternatives: * (asterisk), ‣ (triangular bullet), • (bullet)
+		return "※ Shooting Star"
 	case "Gravestone Doji":
-		return "⚰️ Gravestone"
+		// Current: † (dagger, cross symbol)
+		// Alternatives: ‡ (double dagger)
+		return "† Gravestone"
 	case "Dragonfly Doji":
-		return "🦋 Dragonfly"
+		// Current: ψ (small psi, trident-like)
+		// Alternatives: Ψ (capital psi), ‡ (double dagger)
+		return "ψ Dragonfly"
 	case "Bullish Marubozu":
-		return "📈 Bull Marubozu"
+		// Current: ^ (circumflex, upward direction)
+		// Alternatives: Λ (lambda), Δ (delta)
+		return "^ Bull Marubozu"
 	case "Bearish Marubozu":
-		return "📉 Bear Marubozu"
+		// Current: v (lowercase v, downward direction)
+		return "v Bear Marubozu"
 	case "Spinning Top":
-		return "🌀 Spinning Top"
+		// Current: ◌ (dotted circle, spinning motion)
+		// Alternatives: • (bullet)
+		return "◌ Spinning Top"
 	case "Bullish Engulfing":
-		return "🔥 Bull Engulfing"
+		// Current: Λ (Lambda, upward V shape, engulfing)
+		// Alternatives: Δ (delta)
+		return "Λ Bull Engulfing"
 	case "Bearish Engulfing":
-		return "❄️ Bear Engulfing"
+		// Current: V (capital V, downward engulfing)
+		// Alternatives: v (lowercase v)
+		return "V Bear Engulfing"
 	case "Bullish Harami":
-		return "🤱 Bull Harami"
+		// Current: ʘ (bilabial click, circle with dot - containment)
+		// Alternatives: • (bullet), ≈ (approximately equal), ◌ (dotted circle)
+		return "ʘ Bull Harami"
 	case "Bearish Harami":
-		return "🤱 Bear Harami"
+		// Current: θ (small theta, circle with horizontal line - containment)
+		// Alternatives: Θ (capital theta), ϴ (capital theta symbol), ◌ (dotted circle)
+		return "θ Bear Harami"
 	case "Morning Star":
-		return "🌅 Morning Star"
+		// Current: * (asterisk, star symbol)
+		// Alternatives: ※ (reference mark), ‣ (triangular bullet), • (bullet)
+		return "* Morning Star"
 	case "Evening Star":
-		return "🌆 Evening Star"
+		// Current: ⁎ (low asterisk, evening star)
+		// Alternatives: ※ (reference mark), ‣ (triangular bullet), • (bullet)
+		return "⁎ Evening Star"
 	case "Piercing Line":
-		return "🗲 Piercing Line"
+		// Current: | (vertical bar)
+		// Alternatives: ¦ (broken bar), ǀ (dental click)
+		return "| Piercing Line"
 	case "Dark Cloud Cover":
-		return "☁️ Dark Cloud"
+		// Current: Ξ (Xi, horizontal lines like cloud layers)
+		// Alternatives: ≈ (approximately equal), ∞ (infinity)
+		return "Ξ Dark Cloud"
 	case "Tweezer Top":
-		return "🥢 Tweezer Top"
+		// Current: ‖ (double vertical line, parallel lines like tweezers)
+		return "‖ Tweezer Top"
 	case "Tweezer Bottom":
-		return "🥢 Tweezer Bottom"
+		// Current: ǁ (lateral click, parallel lines like tweezers)
+		return "ǁ Tweezer Bottom"
 	case "Three White Soldiers":
-		return "⚔️ Three Soldiers"
+		// Current: Ш (Cyrillic Sha, three vertical lines like soldiers)
+		// Alternatives: Ξ (xi)
+		return "Ш Three Soldiers"
 	case "Three Black Crows":
-		return "🦅 Three Crows"
+		// Current: ω (omega, three lines like crow)
+		// Alternatives: Ш (capital sha), Ξ (capital xi), ш (small Cyrillic sha)
+		return "ω Three Crows"
 	default:
 		return patternName
 	}

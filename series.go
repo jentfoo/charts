@@ -270,7 +270,10 @@ func (g GenericSeriesList) getSeriesLen(index int) int {
 	return len(g[index].Values)
 }
 
-func (g GenericSeriesList) getSeriesSymbol(_ int) Symbol {
+func (g GenericSeriesList) getSeriesSymbol(i int) Symbol {
+	if g[i].Type == ChartTypeCandlestick {
+		return symbolCandlestick // return type here so captured for defaultRender in ChartOptions render
+	}
 	return ""
 }
 
@@ -2123,7 +2126,7 @@ func (k CandlestickSeriesList) getSeriesLen(index int) int {
 }
 
 func (k CandlestickSeriesList) getSeriesSymbol(_ int) Symbol {
-	return SymbolSquare // Appropriate for candlesticks
+	return "" // no need to set symbol here, configured globally in candlestick_chart.go before defaultRender
 }
 
 func (k CandlestickSeriesList) hasMarkPoint() bool {
