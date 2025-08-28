@@ -2039,10 +2039,13 @@ type CandlestickSeries struct {
 	MarkLine SeriesMarkLine
 	// TrendLine provides configurations for trend lines for this series.
 	TrendLine []SeriesTrendLine
+	// TODO - fields below in generic series?
 	// ShowWicks when false hides the high-low wicks (showing only the body)
 	ShowWicks *bool
 	// CandleStyle specifies the visual style: "filled", "traditional", "outline"
 	CandleStyle string
+	// PatternConfig configures automatic pattern detection and labeling
+	PatternConfig *CandlestickPatternConfig
 }
 
 func (k *CandlestickSeries) getYAxisIndex() int {
@@ -2174,11 +2177,12 @@ func (k CandlestickSeriesList) ToGenericSeriesList() GenericSeriesList {
 
 // CandlestickSeriesOption provides series customization
 type CandlestickSeriesOption struct {
-	Label       SeriesLabel
-	Names       []string
-	MarkPoint   SeriesMarkPoint
-	MarkLine    SeriesMarkLine
-	CandleStyle string
+	Label         SeriesLabel
+	Names         []string
+	MarkPoint     SeriesMarkPoint
+	MarkLine      SeriesMarkLine
+	CandleStyle   string
+	PatternConfig *CandlestickPatternConfig
 }
 
 // NewSeriesListCandlestick builds a SeriesList for candlestick charts from OHLC data.
@@ -2191,11 +2195,12 @@ func NewSeriesListCandlestick(data [][]OHLCData, opts ...CandlestickSeriesOption
 	seriesList := make([]CandlestickSeries, len(data))
 	for index, ohlcData := range data {
 		s := CandlestickSeries{
-			Data:        ohlcData,
-			Label:       opt.Label,
-			MarkPoint:   opt.MarkPoint,
-			MarkLine:    opt.MarkLine,
-			CandleStyle: opt.CandleStyle,
+			Data:          ohlcData,
+			Label:         opt.Label,
+			MarkPoint:     opt.MarkPoint,
+			MarkLine:      opt.MarkLine,
+			CandleStyle:   opt.CandleStyle,
+			PatternConfig: opt.PatternConfig,
 		}
 		if index < len(opt.Names) {
 			s.Name = opt.Names[index]

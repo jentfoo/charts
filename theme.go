@@ -92,10 +92,6 @@ type ColorPalette interface {
 	WithTitleBorderColor(Color) ColorPalette
 	// WithLegendBorderColor returns a new ColorPalette with the specified legend border color.
 	WithLegendBorderColor(Color) ColorPalette
-	// GetUpColor returns the color for bullish (close > open) candles.
-	GetUpColor() Color
-	// GetDownColor returns the color for bearish (close < open) candles.
-	GetDownColor() Color
 	// GetCandleWickColor returns the color for the high-low wicks.
 	GetCandleWickColor() Color
 	// GetSeriesUpDownColors returns distinct "up" and "down" colors for each series index.
@@ -119,8 +115,6 @@ type themeColorPalette struct {
 	legendBorderColor  Color
 	seriesColors       []Color
 	seriesTrendColors  []Color
-	upColor            Color
-	downColor          Color
 	candleWickColor    Color
 	seriesUpDownColors [][2]Color
 }
@@ -149,20 +143,6 @@ func (t *themeColorPalette) GetYAxisTextColor() Color {
 	return t.yaxisTextColor
 }
 
-func (t *themeColorPalette) GetUpColor() Color {
-	if t.upColor.IsZero() {
-		return Color{R: 34, G: 197, B: 94, A: 255} // Green default
-	}
-	return t.upColor
-}
-
-func (t *themeColorPalette) GetDownColor() Color {
-	if t.downColor.IsZero() {
-		return Color{R: 239, G: 68, B: 68, A: 255} // Red default
-	}
-	return t.downColor
-}
-
 func (t *themeColorPalette) GetCandleWickColor() Color {
 	return t.candleWickColor
 }
@@ -182,9 +162,7 @@ func (t *themeColorPalette) GetSeriesUpDownColors(index int) (Color, Color) {
 			return upColor, downColor
 		}
 	}
-
-	// Fallback to default theme up/down colors
-	return t.GetUpColor(), t.GetDownColor()
+	return ColorGreen, ColorRed // should not be possible if using makeColorPalette, but defensive
 }
 
 // ThemeOption defines color options for a theme.
@@ -223,13 +201,9 @@ type ThemeOption struct {
 	SeriesColors []Color
 	// SeriesTrendColors provides the palette for rendered trend lines.
 	SeriesTrendColors []Color
-	// UpColor is the color for bullish (close > open) candles. Default: green
-	UpColor Color
-	// DownColor is the color for bearish (close < open) candles. Default: red
-	DownColor Color
-	// CandleWickColor is the color for the high-low wicks. If not set, uses body color
+	// CandleWickColor is the color for the high-low wicks. If not set, uses body color.
 	CandleWickColor Color
-	// SeriesUpDownColors provides distinct up/down color pairs for each series
+	// SeriesUpDownColors provides distinct up/down (bear/bull) color pairs for each series.
 	SeriesUpDownColors [][2]Color
 }
 
@@ -242,12 +216,6 @@ var defaultDarkFontColor = Color{R: 238, G: 238, B: 238, A: 255}
 var defaultGlobalMarkFillColor = ColorLightGray
 
 func init() {
-	defaultSeriesUpDownColors := [][2]Color{
-		{
-			Color{R: 34, G: 197, B: 94, A: 255},
-			Color{R: 239, G: 68, B: 68, A: 255},
-		},
-	}
 	echartSeriesColors := []Color{
 		ColorBlueAlt3,
 		ColorGreenAlt6,
@@ -259,6 +227,12 @@ func init() {
 		ColorPurpleAlt1,
 		ColorPurpleAlt2,
 	}
+	echartSeriesUpDownColors := [][2]Color{
+		// shade pairs from the echarts series colors
+		{ColorGreenAlt6, ColorRedAlt4},   // Green / Red
+		{ColorAquaAlt2, ColorOrangeAlt4}, // Aqua / Dark Orange
+		{ColorBlueAlt3, ColorPurpleAlt2}, // Blue / Light Purple
+	}
 	InstallTheme(
 		ThemeLight,
 		ThemeOption{
@@ -268,7 +242,7 @@ func init() {
 			BackgroundColor:    ColorWhite,
 			TextColor:          Color{R: 70, G: 70, B: 70, A: 255},
 			SeriesColors:       echartSeriesColors,
-			SeriesUpDownColors: defaultSeriesUpDownColors,
+			SeriesUpDownColors: echartSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -280,7 +254,7 @@ func init() {
 			BackgroundColor:    ColorDarkGray,
 			TextColor:          Color{R: 238, G: 238, B: 238, A: 255},
 			SeriesColors:       echartSeriesColors,
-			SeriesUpDownColors: defaultSeriesUpDownColors,
+			SeriesUpDownColors: echartSeriesUpDownColors,
 		},
 	)
 	vividSeriesColors := []Color{
@@ -310,6 +284,11 @@ func init() {
 			R: 90, G: 118, B: 140, A: 255,
 		},
 	}
+	vividSeriesUpDownColors := [][2]Color{
+		{ColorGreenAlt5, ColorRedAlt3},
+		{{R: 64, G: 160, B: 110, A: 255}, {R: 250, G: 128, B: 80, A: 255}},   // Green / Light Red
+		{{R: 110, G: 220, B: 210, A: 255}, {R: 220, G: 150, B: 210, A: 255}}, // Light Teal / Light Purple (neutral pair)
+	}
 	InstallTheme(
 		ThemeVividLight,
 		ThemeOption{
@@ -319,7 +298,7 @@ func init() {
 			BackgroundColor:    ColorWhite,
 			TextColor:          Color{R: 70, G: 70, B: 70, A: 255},
 			SeriesColors:       vividSeriesColors,
-			SeriesUpDownColors: defaultSeriesUpDownColors,
+			SeriesUpDownColors: vividSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -331,7 +310,7 @@ func init() {
 			BackgroundColor:    ColorDarkGray,
 			TextColor:          Color{R: 238, G: 238, B: 238, A: 255},
 			SeriesColors:       vividSeriesColors,
-			SeriesUpDownColors: defaultSeriesUpDownColors,
+			SeriesUpDownColors: vividSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -366,7 +345,12 @@ func init() {
 				},
 				ColorOrangeAlt3,
 			},
-			SeriesUpDownColors: defaultSeriesUpDownColors,
+			SeriesUpDownColors: [][2]Color{
+				// Ant-design inspired colors
+				{{R: 90, G: 216, B: 166, A: 255}, {R: 246, G: 189, B: 22, A: 255}},  // Light green / Dark yellow
+				{{R: 91, G: 143, B: 249, A: 255}, {R: 148, G: 95, B: 185, A: 255}},  // Light blue / Purple
+				{{R: 109, G: 200, B: 236, A: 255}, {R: 255, G: 152, B: 69, A: 255}}, // Aqua / Orange
+			},
 		},
 	)
 	InstallTheme(
@@ -399,7 +383,12 @@ func init() {
 				},
 				ColorGreenAlt4,
 			},
-			SeriesUpDownColors: defaultSeriesUpDownColors,
+			SeriesUpDownColors: [][2]Color{
+				// Grafana-style dark theme colors
+				{{R: 126, G: 178, B: 109, A: 255}, {R: 239, G: 132, B: 60, A: 255}}, // Dark green / Orange
+				{{R: 110, G: 208, B: 224, A: 255}, {R: 234, G: 184, B: 57, A: 255}}, // Aqua / Yellow-orange
+				{{R: 64, G: 160, B: 120, A: 255}, ColorRedAlt2},                     // Forest green #40A078 / Red
+			},
 		},
 	)
 	natureSeriesColors := []Color{
@@ -431,6 +420,12 @@ func init() {
 			R: 128, G: 146, B: 140, A: 255,
 		},
 	}
+	natureSeriesUpDownColors := [][2]Color{
+		// Earthy, nature-inspired up/down colors
+		{ColorGreenAlt7, {R: 203, G: 134, B: 115, A: 255}},                   // Moss green / Clay red
+		{{R: 135, G: 164, B: 112, A: 255}, {R: 242, G: 153, B: 119, A: 255}}, // Earthy olive / Terracotta
+		{{R: 100, G: 150, B: 180, A: 255}, {R: 171, G: 136, B: 100, A: 255}}, // Ocean blue / Forest brown
+	}
 	greenHeaderText := ColorGreenAlt3.WithAdjustHSL(0, 0, -0.2)
 	InstallTheme(
 		ThemeNatureLight,
@@ -443,7 +438,7 @@ func init() {
 			TextColorTitle:     greenHeaderText,
 			TextColorLegend:    greenHeaderText,
 			SeriesColors:       natureSeriesColors,
-			SeriesUpDownColors: defaultSeriesUpDownColors,
+			SeriesUpDownColors: natureSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -456,7 +451,7 @@ func init() {
 			TextColor:          Color{R: 238, G: 238, B: 238, A: 255},
 			TextColorTitle:     ColorWhite,
 			SeriesColors:       natureSeriesColors,
-			SeriesUpDownColors: defaultSeriesUpDownColors,
+			SeriesUpDownColors: natureSeriesUpDownColors,
 		},
 	)
 	InstallTheme(
@@ -488,7 +483,12 @@ func init() {
 					R: 25, G: 42, B: 64, A: 255,
 				},
 			},
-			SeriesUpDownColors: defaultSeriesUpDownColors,
+			SeriesUpDownColors: [][2]Color{
+				// Retro/vintage themed up/down colors
+				{{R: 145, G: 150, B: 99, A: 255}, ColorMaroon},       // Sage olive green / Maroon
+				{ColorTeal, {R: 184, G: 90, B: 0, A: 255}},           // Teal / Dark orange
+				{ColorMustardYellow, {R: 200, G: 80, B: 50, A: 255}}, // Mustard yellow / Light red
+			},
 		},
 	)
 	blueHeaderText := ColorBlue.WithAdjustHSL(0, 0, -0.2)
@@ -520,7 +520,12 @@ func init() {
 				ColorPink,
 				ColorPlum,
 			},
-			SeriesUpDownColors: defaultSeriesUpDownColors,
+			SeriesUpDownColors: [][2]Color{
+				// Ocean-inspired up/down colors
+				{{R: 90, G: 210, B: 160, A: 255}, {R: 252, G: 163, B: 148, A: 255}}, // Seafoam green / Coral pink
+				{{R: 110, G: 220, B: 210, A: 255}, ColorPink},                       // Light teal / Pink
+				{ColorSkyBlue, {R: 180, G: 140, B: 210, A: 255}},                    // Sky blue / Light purple
+			},
 		},
 	)
 	InstallTheme(
@@ -565,7 +570,12 @@ func init() {
 					R: 120, G: 160, B: 140, A: 255,
 				},
 			},
-			SeriesUpDownColors: defaultSeriesUpDownColors,
+			SeriesUpDownColors: [][2]Color{
+				// Pastel colors on dark slate background
+				{{R: 125, G: 210, B: 196, A: 255}, ColorLightCoral},                  // Pale aqua / Light coral
+				{{R: 180, G: 200, B: 165, A: 255}, {R: 250, G: 160, B: 140, A: 255}}, // Pale sage green / Pale salmon
+				{{R: 170, G: 190, B: 255, A: 255}, {R: 250, G: 240, B: 120, A: 255}}, // Pale blue / Pale yellow
+			},
 		},
 	)
 	InstallTheme(
@@ -587,7 +597,11 @@ func init() {
 				{R: 228, G: 228, B: 228, A: 255},
 				{R: 248, G: 248, B: 248, A: 255},
 			},
-			SeriesUpDownColors: defaultSeriesUpDownColors,
+			SeriesUpDownColors: [][2]Color{
+				{ColorDarkGray, ColorLightGray.WithAdjustHSL(0, 0, -.1)}, // Dark gray (up) / Light gray (down)
+				{ColorDarkGray.WithAdjustHSL(0, 0, .2), ColorLightGray.WithAdjustHSL(0, 0, -.2)},
+				{ColorDarkGray.WithAdjustHSL(0, 0, .4), ColorLightGray.WithAdjustHSL(0, 0, -.4)},
+			},
 		},
 	)
 	InstallTheme(
@@ -621,7 +635,12 @@ func init() {
 					R: 80, G: 110, B: 190, A: 255,
 				},
 			},
-			SeriesUpDownColors: defaultSeriesUpDownColors,
+			SeriesUpDownColors: [][2]Color{
+				// Winter blues and purples
+				{{R: 110, G: 150, B: 240, A: 255}, ColorPlum},                        // Frosty blue #6E96F0 / Plum
+				{{R: 90, G: 130, B: 210, A: 255}, {R: 210, G: 180, B: 230, A: 255}},  // Ice blue #5A82D2 / Pale lavender #D2B4E6
+				{{R: 150, G: 190, B: 255, A: 255}, {R: 190, G: 160, B: 220, A: 255}}, // Light blue #96BEFF / Soft purple #BEA0DC
+			},
 		},
 	)
 	InstallTheme(
@@ -652,7 +671,12 @@ func init() {
 					R: 110, G: 210, B: 200, A: 255,
 				},
 			},
-			SeriesUpDownColors: defaultSeriesUpDownColors,
+			SeriesUpDownColors: [][2]Color{
+				// Spring greens and yellows
+				{{R: 120, G: 200, B: 130, A: 255}, {R: 240, G: 220, B: 120, A: 255}}, // Lime green / Sun yellow
+				{{R: 150, G: 230, B: 180, A: 255}, {R: 220, G: 210, B: 100, A: 255}}, // Mint green / Golden yellow
+				{{R: 110, G: 210, B: 200, A: 255}, ColorSkyBlue},                     // Light teal / Sky blue
+			},
 		},
 	)
 	InstallTheme(
@@ -679,7 +703,12 @@ func init() {
 				},
 				ColorOrangeAlt2,
 			},
-			SeriesUpDownColors: defaultSeriesUpDownColors,
+			SeriesUpDownColors: [][2]Color{
+				// Summer oranges and corals
+				{{R: 250, G: 240, B: 120, A: 255}, ColorSalmon},     // Pale yellow / Salmon
+				{{R: 230, G: 220, B: 110, A: 255}, ColorOrange},     // Bright yellow / Orange
+				{ColorOrangeAlt2, {R: 250, G: 160, B: 140, A: 255}}, // Light orange / Coral pink
+			},
 		},
 	)
 	InstallTheme(
@@ -708,7 +737,12 @@ func init() {
 					R: 230, G: 140, B: 50, A: 255,
 				},
 			},
-			SeriesUpDownColors: defaultSeriesUpDownColors,
+			SeriesUpDownColors: [][2]Color{
+				// Fall yellows and browns
+				{{R: 240, G: 190, B: 90, A: 255}, {R: 180, G: 120, B: 60, A: 255}},  // Amber yellow / Burnt brown
+				{{R: 220, G: 190, B: 110, A: 255}, {R: 200, G: 130, B: 70, A: 255}}, // Golden yellow / Copper orange
+				{{R: 230, G: 140, B: 50, A: 255}, {R: 140, G: 90, B: 50, A: 255}},   // Rust orange / Dark brown
+			},
 		},
 	)
 
@@ -794,10 +828,9 @@ func makeColorPalette(o ThemeOption) *themeColorPalette {
 
 	// If SeriesUpDownColors is not provided, use default green/red for all series
 	if len(o.SeriesUpDownColors) == 0 {
-		defaultGreen := Color{R: 34, G: 197, B: 94, A: 255}
-		defaultRed := Color{R: 239, G: 68, B: 68, A: 255}
-		o.SeriesUpDownColors = [][2]Color{{defaultGreen, defaultRed}}
+		o.SeriesUpDownColors = [][2]Color{{ColorGreenAlt5, ColorRedAlt3}}
 	}
+
 	return &themeColorPalette{
 		isDarkMode:         o.IsDarkMode,
 		xaxisStrokeColor:   o.XAxisStrokeColor,
@@ -814,8 +847,6 @@ func makeColorPalette(o ThemeOption) *themeColorPalette {
 		yaxisTextColor:     o.TextColorYAxis,
 		seriesColors:       o.SeriesColors,
 		seriesTrendColors:  o.SeriesTrendColors,
-		upColor:            o.UpColor,
-		downColor:          o.DownColor,
 		candleWickColor:    o.CandleWickColor,
 		seriesUpDownColors: o.SeriesUpDownColors,
 	}
