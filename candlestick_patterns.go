@@ -34,6 +34,29 @@ const (
 	PatternThreeBlackCrows    = "three_black_crows"
 )
 
+// PatternFormatter allows custom formatting of detected patterns
+type PatternFormatter func(patterns []PatternDetectionResult, seriesName string, value float64) (string, *LabelStyle)
+
+// CandlestickPatternConfig configures automatic pattern detection.
+type CandlestickPatternConfig struct {
+	// ReplaceSeriesLabel controls pattern/user label interaction
+	// true = patterns replace user labels, false = patterns complement user labels
+	ReplaceSeriesLabel bool
+
+	// EnabledPatterns lists specific patterns to detect
+	// nil or empty = no patterns detected (PatternConfig must be set to enable)
+	// ["doji", "hammer"] = only these patterns
+	EnabledPatterns []string
+
+	// DetectionOptions configures detection sensitivity thresholds
+	DetectionOptions PatternDetectionOption
+
+	// PatternFormatter allows custom formatting (optional)
+	// If nil, uses default formatting with theme colors
+	PatternFormatter PatternFormatter
+}
+
+// TODO - merge with config above?
 // PatternDetectionOption configures pattern detection sensitivity
 type PatternDetectionOption struct {
 	// DojiThreshold is the percentage threshold for doji detection (default: 0.1%)
@@ -643,8 +666,297 @@ type PatternDetectionResult struct {
 	PatternType string
 }
 
-// ScanCandlestickPatterns scans entire series for patterns and returns detected patterns
-func ScanCandlestickPatterns(series CandlestickSeries, options ...PatternDetectionOption) []PatternDetectionResult {
+// scanSeriesForPatterns scans entire series upfront for configured patterns (private)
+func scanSeriesForPatterns(series *CandlestickSeries, config *CandlestickPatternConfig) map[int][]PatternDetectionResult {
+	// Early exit if no patterns enabled
+	if len(config.EnabledPatterns) == 0 {
+		return nil
+	}
+
+	patternMap := make(map[int][]PatternDetectionResult)
+	options := config.DetectionOptions
+	for index, ohlc := range series.Data {
+		if !validateOHLCData(ohlc) {
+			continue
+		}
+
+		var patterns []PatternDetectionResult
+
+		// Single candle patterns
+		if isPatternEnabled(PatternDoji, config.EnabledPatterns) && DetectDoji(ohlc, options.DojiThreshold) {
+			patterns = append(patterns, PatternDetectionResult{
+				Index:       index,
+				PatternName: "Doji",
+				PatternType: PatternDoji,
+			})
+		}
+
+		if isPatternEnabled(PatternHammer, config.EnabledPatterns) && DetectHammer(ohlc, options.ShadowRatio) {
+			patterns = append(patterns, PatternDetectionResult{
+				Index:       index,
+				PatternName: "Hammer",
+				PatternType: PatternHammer,
+			})
+		}
+
+		if isPatternEnabled(PatternInvertedHammer, config.EnabledPatterns) && DetectInvertedHammer(ohlc, options.ShadowRatio) {
+			patterns = append(patterns, PatternDetectionResult{
+				Index:       index,
+				PatternName: "Inverted Hammer",
+				PatternType: PatternInvertedHammer,
+			})
+		}
+
+		if isPatternEnabled(PatternShootingStar, config.EnabledPatterns) && DetectShootingStar(ohlc, options.ShadowRatio) {
+			patterns = append(patterns, PatternDetectionResult{
+				Index:       index,
+				PatternName: "Shooting Star",
+				PatternType: PatternShootingStar,
+			})
+		}
+
+		if isPatternEnabled(PatternGravestone, config.EnabledPatterns) && DetectGravestoneDoji(ohlc, options) {
+			patterns = append(patterns, PatternDetectionResult{
+				Index:       index,
+				PatternName: "Gravestone Doji",
+				PatternType: PatternGravestone,
+			})
+		}
+
+		if isPatternEnabled(PatternDragonfly, config.EnabledPatterns) && DetectDragonflyDoji(ohlc, options) {
+			patterns = append(patterns, PatternDetectionResult{
+				Index:       index,
+				PatternName: "Dragonfly Doji",
+				PatternType: PatternDragonfly,
+			})
+		}
+
+		// Marubozu patterns
+		if isPatternEnabled(PatternMarubozuBull, config.EnabledPatterns) || isPatternEnabled(PatternMarubozuBear, config.EnabledPatterns) {
+			bullishMarubozu, bearishMarubozu := DetectMarubozu(ohlc, 0.01)
+			if isPatternEnabled(PatternMarubozuBull, config.EnabledPatterns) && bullishMarubozu {
+				patterns = append(patterns, PatternDetectionResult{
+					Index:       index,
+					PatternName: "Bullish Marubozu",
+					PatternType: PatternMarubozuBull,
+				})
+			}
+			if isPatternEnabled(PatternMarubozuBear, config.EnabledPatterns) && bearishMarubozu {
+				patterns = append(patterns, PatternDetectionResult{
+					Index:       index,
+					PatternName: "Bearish Marubozu",
+					PatternType: PatternMarubozuBear,
+				})
+			}
+		}
+
+		if isPatternEnabled(PatternSpinningTop, config.EnabledPatterns) && DetectSpinningTop(ohlc, 0.3) {
+			patterns = append(patterns, PatternDetectionResult{
+				Index:       index,
+				PatternName: "Spinning Top",
+				PatternType: PatternSpinningTop,
+			})
+		}
+
+		// Two candle patterns (if index > 0)
+		if index > 0 && validateOHLCData(series.Data[index-1]) {
+			prev := series.Data[index-1]
+
+			// Engulfing patterns
+			if isPatternEnabled(PatternEngulfingBull, config.EnabledPatterns) || isPatternEnabled(PatternEngulfingBear, config.EnabledPatterns) {
+				bullEngulfing, bearEngulfing := DetectEngulfing(prev, ohlc, options.EngulfingMinSize)
+				if isPatternEnabled(PatternEngulfingBull, config.EnabledPatterns) && bullEngulfing {
+					patterns = append(patterns, PatternDetectionResult{
+						Index:       index,
+						PatternName: "Bullish Engulfing",
+						PatternType: PatternEngulfingBull,
+					})
+				}
+				if isPatternEnabled(PatternEngulfingBear, config.EnabledPatterns) && bearEngulfing {
+					patterns = append(patterns, PatternDetectionResult{
+						Index:       index,
+						PatternName: "Bearish Engulfing",
+						PatternType: PatternEngulfingBear,
+					})
+				}
+			}
+
+			// Harami patterns
+			if isPatternEnabled(PatternHarami, config.EnabledPatterns) {
+				bullishHarami, bearishHarami := DetectHarami(prev, ohlc, 0.3)
+				if bullishHarami {
+					patterns = append(patterns, PatternDetectionResult{
+						Index:       index,
+						PatternName: "Bullish Harami",
+						PatternType: PatternHarami,
+					})
+				}
+				if bearishHarami {
+					patterns = append(patterns, PatternDetectionResult{
+						Index:       index,
+						PatternName: "Bearish Harami",
+						PatternType: PatternHarami,
+					})
+				}
+			}
+
+			if isPatternEnabled(PatternPiercingLine, config.EnabledPatterns) && DetectPiercingLine(prev, ohlc) {
+				patterns = append(patterns, PatternDetectionResult{
+					Index:       index,
+					PatternName: "Piercing Line",
+					PatternType: PatternPiercingLine,
+				})
+			}
+
+			if isPatternEnabled(PatternDarkCloudCover, config.EnabledPatterns) && DetectDarkCloudCover(prev, ohlc) {
+				patterns = append(patterns, PatternDetectionResult{
+					Index:       index,
+					PatternName: "Dark Cloud Cover",
+					PatternType: PatternDarkCloudCover,
+				})
+			}
+
+			if isPatternEnabled(PatternTweezerTop, config.EnabledPatterns) && DetectTweezerTops(prev, ohlc, 0.005) {
+				patterns = append(patterns, PatternDetectionResult{
+					Index:       index,
+					PatternName: "Tweezer Top",
+					PatternType: PatternTweezerTop,
+				})
+			}
+
+			if isPatternEnabled(PatternTweezerBottom, config.EnabledPatterns) && DetectTweezerBottoms(prev, ohlc, 0.005) {
+				patterns = append(patterns, PatternDetectionResult{
+					Index:       index,
+					PatternName: "Tweezer Bottom",
+					PatternType: PatternTweezerBottom,
+				})
+			}
+		}
+
+		// Three candle patterns (if index > 1)
+		if index > 1 && validateOHLCData(series.Data[index-1]) && validateOHLCData(series.Data[index-2]) {
+			prev := series.Data[index-1]
+			prevPrev := series.Data[index-2]
+
+			if isPatternEnabled(PatternMorningStar, config.EnabledPatterns) && DetectMorningStar(prevPrev, prev, ohlc, options) {
+				patterns = append(patterns, PatternDetectionResult{
+					Index:       index,
+					PatternName: "Morning Star",
+					PatternType: PatternMorningStar,
+				})
+			}
+
+			if isPatternEnabled(PatternEveningStar, config.EnabledPatterns) && DetectEveningStar(prevPrev, prev, ohlc, options) {
+				patterns = append(patterns, PatternDetectionResult{
+					Index:       index,
+					PatternName: "Evening Star",
+					PatternType: PatternEveningStar,
+				})
+			}
+
+			if isPatternEnabled(PatternThreeWhiteSoldiers, config.EnabledPatterns) && DetectThreeWhiteSoldiers(prevPrev, prev, ohlc) {
+				patterns = append(patterns, PatternDetectionResult{
+					Index:       index,
+					PatternName: "Three White Soldiers",
+					PatternType: PatternThreeWhiteSoldiers,
+				})
+			}
+
+			if isPatternEnabled(PatternThreeBlackCrows, config.EnabledPatterns) && DetectThreeBlackCrows(prevPrev, prev, ohlc) {
+				patterns = append(patterns, PatternDetectionResult{
+					Index:       index,
+					PatternName: "Three Black Crows",
+					PatternType: PatternThreeBlackCrows,
+				})
+			}
+		}
+
+		// Store patterns if any were found
+		if len(patterns) > 0 {
+			patternMap[index] = patterns
+		}
+	}
+
+	return patternMap
+}
+
+// isPatternEnabled checks if a pattern is in the enabled list (private)
+func isPatternEnabled(patternType string, enabledPatterns []string) bool {
+	// Must have explicit patterns listed
+	if len(enabledPatterns) == 0 {
+		return false
+	}
+	// Check if pattern is in the enabled list
+	for _, p := range enabledPatterns {
+		if p == patternType {
+			return true
+		}
+	}
+	return false
+}
+
+// formatPatternsDefault provides default pattern formatting (private)
+func formatPatternsDefault(patterns []PatternDetectionResult, seriesIndex int, theme ColorPalette) (string, *LabelStyle) {
+	if len(patterns) == 0 {
+		return "", nil
+	}
+
+	// Build display names and determine color
+	displayNames := make([]string, len(patterns))
+	var bullishCount, bearishCount, neutralCount int
+	for i, pattern := range patterns {
+		displayNames[i] = getPatternDisplayName(pattern.PatternName)
+
+		// Count pattern types to determine color
+		switch pattern.PatternType {
+		case PatternHammer, PatternMorningStar, PatternEngulfingBull, PatternDragonfly, PatternMarubozuBull, PatternPiercingLine, PatternTweezerBottom, PatternThreeWhiteSoldiers:
+			bullishCount++
+		case PatternShootingStar, PatternEveningStar, PatternEngulfingBear, PatternGravestone, PatternMarubozuBear, PatternDarkCloudCover, PatternTweezerTop, PatternThreeBlackCrows:
+			bearishCount++
+		default: // Doji, spinning top and other neutral patterns
+			neutralCount++
+		}
+	}
+
+	// Determine color based on predominant pattern type
+	upColor, downColor := theme.GetSeriesUpDownColors(seriesIndex)
+	var color Color
+	if bullishCount > bearishCount && bullishCount > neutralCount {
+		color = upColor
+	} else if bearishCount > bullishCount && bearishCount > neutralCount {
+		color = downColor
+	} else {
+		if theme.IsDark() {
+			color = Color{R: 100, G: 100, B: 100, A: 255} // dark gray
+		} else {
+			color = Color{R: 200, G: 200, B: 200, A: 255} // light gray
+		}
+	}
+
+	// Use theme-appropriate background based on dark/light mode
+	var backgroundColor, fontColor Color
+	if theme.IsDark() {
+		backgroundColor = ColorBlack.WithAlpha(180)
+		fontColor = color.WithAdjustHSL(0, 0, 0.28) // Lighter for dark backgrounds
+	} else {
+		backgroundColor = ColorWhite.WithAlpha(180)
+		fontColor = color.WithAdjustHSL(0, 0, -0.28) // Darker for light backgrounds
+	}
+
+	return strings.Join(displayNames, "\n"), &LabelStyle{
+		FontStyle: FontStyle{
+			FontColor: fontColor,
+			FontSize:  10,
+		},
+		BackgroundColor: backgroundColor,
+		CornerRadius:    4,
+		BorderColor:     color,
+		BorderWidth:     1.2,
+	}
+}
+
+// scanCandlestickPatterns scans entire series for patterns and returns detected patterns (private)
+func scanCandlestickPatterns(series CandlestickSeries, options ...PatternDetectionOption) []PatternDetectionResult {
 	var opt PatternDetectionOption
 	if len(options) > 0 {
 		opt = options[0]
@@ -842,118 +1154,6 @@ func ScanCandlestickPatterns(series CandlestickSeries, options ...PatternDetecti
 	return patterns
 }
 
-// CreatePatternLabelFormatter returns a SeriesLabelFormatter that shows pattern names for detected patterns
-func CreatePatternLabelFormatter(series CandlestickSeries, options ...PatternDetectionOption) SeriesLabelFormatter {
-	patterns := ScanCandlestickPatterns(series, options...)
-
-	// Create a map for fast lookup of patterns by index, handling multiple patterns per index
-	patternMap := make(map[int][]string)
-	for _, pattern := range patterns {
-		patternMap[pattern.Index] = append(patternMap[pattern.Index], pattern.PatternName)
-	}
-
-	return func(index int, name string, val float64) (string, *LabelStyle) {
-		if patternNames, found := patternMap[index]; found {
-			// Join multiple pattern names with newlines for better readability
-			var displayNames []string
-			for _, patternName := range patternNames {
-				displayNames = append(displayNames, getPatternDisplayName(patternName))
-			}
-			displayName := strings.Join(displayNames, "\n")
-
-			return displayName, &LabelStyle{
-				FontStyle: FontStyle{
-					FontColor: ColorRed,
-					FontSize:  11,
-				},
-				BackgroundColor: Color{R: 255, G: 255, B: 255, A: 200}, // Semi-transparent white
-				CornerRadius:    4,
-				BorderColor:     ColorRed,
-				BorderWidth:     1.5,
-			}
-		}
-		// Return empty string to hide label for non-pattern candlesticks
-		return "", nil
-	}
-}
-
-// CreatePatternLabelFormatterWithColors returns a SeriesLabelFormatter with custom colors for different pattern types
-func CreatePatternLabelFormatterWithColors(series CandlestickSeries, bullishColor, bearishColor, neutralColor Color, options ...PatternDetectionOption) SeriesLabelFormatter {
-	patterns := ScanCandlestickPatterns(series, options...)
-
-	// Create a map for fast lookup of patterns by index, handling multiple patterns
-	patternMap := make(map[int][]PatternDetectionResult)
-	for _, pattern := range patterns {
-		patternMap[pattern.Index] = append(patternMap[pattern.Index], pattern)
-	}
-
-	return func(index int, name string, val float64) (string, *LabelStyle) {
-		if patternsAtIndex, found := patternMap[index]; found {
-			// Build display names for all patterns and determine predominant color
-			var displayNames []string
-			var bullishCount, bearishCount, neutralCount int
-
-			for _, pattern := range patternsAtIndex {
-				displayNames = append(displayNames, getPatternDisplayName(pattern.PatternName))
-
-				// Count pattern types to determine predominant color
-				switch pattern.PatternType {
-				case PatternHammer, PatternMorningStar, PatternEngulfingBull, PatternDragonfly, PatternMarubozuBull, PatternPiercingLine, PatternTweezerBottom, PatternThreeWhiteSoldiers:
-					bullishCount++
-				case PatternShootingStar, PatternEveningStar, PatternEngulfingBear, PatternGravestone, PatternMarubozuBear, PatternDarkCloudCover, PatternTweezerTop, PatternThreeBlackCrows:
-					bearishCount++
-				default: // Doji, spinning top and other neutral patterns
-					neutralCount++
-				}
-			}
-
-			// Determine color based on predominant pattern type
-			var color Color
-			if bullishCount > bearishCount && bullishCount > neutralCount {
-				color = bullishColor
-			} else if bearishCount > bullishCount && bearishCount > neutralCount {
-				color = bearishColor
-			} else {
-				color = neutralColor
-			}
-
-			displayName := strings.Join(displayNames, "\n")
-
-			return displayName, &LabelStyle{
-				FontStyle: FontStyle{
-					FontColor: color,
-					FontSize:  10,
-				},
-				BackgroundColor: Color{R: 255, G: 255, B: 255, A: 180}, // Semi-transparent white
-				CornerRadius:    3,
-				BorderColor:     color,
-				BorderWidth:     1.2,
-			}
-		}
-		// Return empty string to hide label for non-pattern candlesticks
-		return "", nil
-	}
-}
-
-// AddPatternLabels is a convenience function to add pattern detection labels to a candlestick series
-func (k *CandlestickSeries) AddPatternLabels(options ...PatternDetectionOption) {
-	k.Label.Show = Ptr(true)
-	k.Label.LabelFormatter = CreatePatternLabelFormatter(*k, options...)
-}
-
-// AddPatternLabelsWithColors is a convenience function to add pattern detection labels with custom colors
-func (k *CandlestickSeries) AddPatternLabelsWithColors(bullishColor, bearishColor, neutralColor Color, options ...PatternDetectionOption) {
-	k.Label.Show = Ptr(true)
-	k.Label.LabelFormatter = CreatePatternLabelFormatterWithColors(*k, bullishColor, bearishColor, neutralColor, options...)
-}
-
-// NewCandlestickWithPatterns creates a candlestick series with automatic pattern detection using labels
-func NewCandlestickWithPatterns(data []OHLCData, options ...PatternDetectionOption) CandlestickSeries {
-	series := CandlestickSeries{Data: data}
-	series.AddPatternLabels(options...)
-	return series
-}
-
 // getPatternDisplayName returns the pattern name with appropriate symbol.
 func getPatternDisplayName(patternName string) string {
 	switch patternName {
@@ -1039,5 +1239,118 @@ func getPatternDisplayName(patternName string) string {
 		return "ω Three Crows"
 	default:
 		return patternName
+	}
+}
+
+// =============================================================================
+// PATTERN CONFIGURATION PRESETS
+// =============================================================================
+
+// PatternsAll enables all standard patterns (replaces user labels)
+func PatternsAll() *CandlestickPatternConfig {
+	return &CandlestickPatternConfig{
+		ReplaceSeriesLabel: true,
+		EnabledPatterns: []string{
+			PatternDoji, PatternHammer, PatternInvertedHammer, PatternShootingStar,
+			PatternGravestone, PatternDragonfly, PatternMarubozuBull, PatternMarubozuBear,
+			PatternSpinningTop, PatternEngulfingBull, PatternEngulfingBear, PatternHarami,
+			PatternPiercingLine, PatternDarkCloudCover, PatternTweezerTop, PatternTweezerBottom,
+			PatternMorningStar, PatternEveningStar, PatternThreeWhiteSoldiers, PatternThreeBlackCrows,
+		},
+		DetectionOptions: DefaultPatternOptions(),
+	}
+}
+
+// PatternsAllComplement enables all standard patterns (complements user labels)
+func PatternsAllComplement() *CandlestickPatternConfig {
+	return &CandlestickPatternConfig{
+		ReplaceSeriesLabel: false,
+		EnabledPatterns: []string{
+			PatternDoji, PatternHammer, PatternInvertedHammer, PatternShootingStar,
+			PatternGravestone, PatternDragonfly, PatternMarubozuBull, PatternMarubozuBear,
+			PatternSpinningTop, PatternEngulfingBull, PatternEngulfingBear, PatternHarami,
+			PatternPiercingLine, PatternDarkCloudCover, PatternTweezerTop, PatternTweezerBottom,
+			PatternMorningStar, PatternEveningStar, PatternThreeWhiteSoldiers, PatternThreeBlackCrows,
+		},
+		DetectionOptions: DefaultPatternOptions(),
+	}
+}
+
+// PatternsImportant enables only key reversal patterns (replaces user labels)
+func PatternsImportant() *CandlestickPatternConfig {
+	return &CandlestickPatternConfig{
+		ReplaceSeriesLabel: true,
+		EnabledPatterns: []string{
+			PatternEngulfingBull, PatternEngulfingBear,
+			PatternMorningStar, PatternEveningStar,
+			PatternHammer, PatternShootingStar,
+		},
+		DetectionOptions: DefaultPatternOptions(),
+	}
+}
+
+// PatternsImportantComplement enables only key reversal patterns (complements user labels)
+func PatternsImportantComplement() *CandlestickPatternConfig {
+	return &CandlestickPatternConfig{
+		ReplaceSeriesLabel: false,
+		EnabledPatterns: []string{
+			PatternEngulfingBull, PatternEngulfingBear,
+			PatternMorningStar, PatternEveningStar,
+			PatternHammer, PatternShootingStar,
+		},
+		DetectionOptions: DefaultPatternOptions(),
+	}
+}
+
+// PatternsBullish enables only bullish patterns (replaces user labels)
+func PatternsBullish() *CandlestickPatternConfig {
+	return &CandlestickPatternConfig{
+		ReplaceSeriesLabel: true,
+		EnabledPatterns: []string{
+			PatternHammer, PatternInvertedHammer, PatternDragonfly,
+			PatternMarubozuBull, PatternEngulfingBull, PatternPiercingLine,
+			PatternTweezerBottom, PatternMorningStar, PatternThreeWhiteSoldiers,
+		},
+		DetectionOptions: DefaultPatternOptions(),
+	}
+}
+
+// PatternsBearish enables only bearish patterns (replaces user labels)
+func PatternsBearish() *CandlestickPatternConfig {
+	return &CandlestickPatternConfig{
+		ReplaceSeriesLabel: true,
+		EnabledPatterns: []string{
+			PatternShootingStar, PatternGravestone,
+			PatternMarubozuBear, PatternEngulfingBear, PatternDarkCloudCover,
+			PatternTweezerTop, PatternEveningStar, PatternThreeBlackCrows,
+		},
+		DetectionOptions: DefaultPatternOptions(),
+	}
+}
+
+// EnablePatterns returns a config for specific patterns (replaces user labels)
+func EnablePatterns(patterns ...string) *CandlestickPatternConfig {
+	return &CandlestickPatternConfig{
+		ReplaceSeriesLabel: true,
+		EnabledPatterns:    patterns,
+		DetectionOptions:   DefaultPatternOptions(),
+	}
+}
+
+// EnablePatternsComplement returns a config for specific patterns (complements user labels)
+func EnablePatternsComplement(patterns ...string) *CandlestickPatternConfig {
+	return &CandlestickPatternConfig{
+		ReplaceSeriesLabel: false,
+		EnabledPatterns:    patterns,
+		DetectionOptions:   DefaultPatternOptions(),
+	}
+}
+
+// DefaultPatternOptions returns sensible default detection options
+func DefaultPatternOptions() PatternDetectionOption {
+	return PatternDetectionOption{
+		DojiThreshold:    0.001, // 0.1% body-to-range ratio
+		ShadowRatio:      2.0,   // 2:1 shadow-to-body ratio
+		EngulfingMinSize: 0.8,   // 80% minimum engulfing size
 	}
 }

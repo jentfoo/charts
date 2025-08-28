@@ -5,6 +5,47 @@ import (
 	"math"
 )
 
+// createPatternAwareLabelFormatter creates a label formatter that can handle pattern detection
+// while respecting user-provided label formatters based on Replace/Complement mode
+func createPatternAwareLabelFormatter(originalSeries *CandlestickSeries, seriesIndex int, theme ColorPalette,
+	patternMap map[int][]PatternDetectionResult) SeriesLabelFormatter {
+	return func(index int, name string, val float64) (string, *LabelStyle) {
+		// Check for patterns at this index using pre-computed map
+		var patterns []PatternDetectionResult
+		if patternMap != nil {
+			patterns = patternMap[index]
+		}
+		if !originalSeries.PatternConfig.ReplaceSeriesLabel && originalSeries.Label.LabelFormatter != nil &&
+			flagIs(true, originalSeries.Label.Show) { // prefer user label if provided
+			userText, userStyle := originalSeries.Label.LabelFormatter(index, name, val)
+			if userText != "" {
+				return userText, userStyle // User label takes precedence
+			}
+		}
+		var patternText string
+		var patternStyle *LabelStyle
+		if originalSeries.PatternConfig.PatternFormatter != nil {
+			patternText, patternStyle = originalSeries.PatternConfig.PatternFormatter(patterns, originalSeries.Name, val)
+		} else {
+			patternText, patternStyle = formatPatternsDefault(patterns, seriesIndex, theme)
+		}
+		if patternText != "" {
+			// either no user input, or configured to replace and we have a matching pattern
+			return patternText, patternStyle
+		}
+
+		if flagIs(true, originalSeries.Label.Show) { // user explicitly requested a label, show something
+			if originalSeries.Label.LabelFormatter != nil {
+				return originalSeries.Label.LabelFormatter(index, name, val)
+			} else if originalSeries.Label.ValueFormatter != nil {
+				return originalSeries.Label.ValueFormatter(val), nil
+			}
+			return defaultValueFormatter(val), nil
+		}
+		return "", nil
+	}
+}
+
 // TODO - v0.6 - attempt to de-duplicate with calculateBarMarginsAndSize
 // calculateCandleMarginsAndSize calculates margins and candle sizes similar to bar charts.
 func calculateCandleMarginsAndSize(seriesCount, space int, configuredCandleSize int, configuredCandleMargin *float64) (int, int, int) {
@@ -126,23 +167,13 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 	if seriesList.len() == 0 {
 		return BoxZero, errors.New("empty series list")
 	}
-
 	seriesPainter := result.seriesPainter
 
 	// Find maximum data count across all series
-	maxDataCount := 0
-	for seriesIndex := 0; seriesIndex < seriesList.len(); seriesIndex++ {
-		dataLen := seriesList.getSeriesLen(seriesIndex)
-		if dataLen > maxDataCount {
-			maxDataCount = dataLen
-		}
-	}
-
+	maxDataCount := getSeriesMaxDataCount(seriesList)
 	if maxDataCount == 0 {
 		return BoxZero, errors.New("no data in any series")
 	}
-
-	// Reuse bar chart positioning logic for consistent spacing
 	width := seriesPainter.Width()
 	seriesCount := seriesList.len()
 
@@ -190,10 +221,24 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 		}
 		yRange := result.yaxisRanges[series.YAxisIndex]
 
-		// Create labelPainter for this series if labels are enabled
+		// Create labelPainter for this series if labels are enabled OR patterns are configured
 		var labelPainter *seriesLabelPainter
-		if flagIs(true, series.Label.Show) {
-			labelPainter = newSeriesLabelPainter(seriesPainter, seriesNames, series.Label, opt.Theme)
+		if flagIs(true, series.Label.Show) || series.PatternConfig != nil {
+			// If patterns are configured, create an enhanced label formatter
+			var labelToUse SeriesLabel
+			var patternMap map[int][]PatternDetectionResult
+			if series.PatternConfig != nil {
+				patternMap = scanSeriesForPatterns(series, series.PatternConfig)
+			}
+			if len(patternMap) > 0 {
+				labelToUse = series.Label // shallow copy
+				labelToUse.LabelFormatter = createPatternAwareLabelFormatter(series, seriesIndex, opt.Theme, patternMap)
+			} else {
+				// No patterns, use original label
+				labelToUse = series.Label
+			}
+
+			labelPainter = newSeriesLabelPainter(seriesPainter, seriesNames, labelToUse, opt.Theme, opt.Padding.Right)
 			rendererList = append(rendererList, labelPainter)
 		}
 		allLabelPainters[seriesIndex] = labelPainter
@@ -202,23 +247,15 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 		upColor, downColor := opt.Theme.GetSeriesUpDownColors(seriesIndex)
 
 		// Initialize points array for this series
-		seriesDataLen := len(series.Data)
-		allSeriesPoints[seriesIndex] = make([]Point, seriesDataLen)
-
+		allSeriesPoints[seriesIndex] = make([]Point, len(series.Data))
 		// Render each candlestick in this series
 		for j, ohlc := range series.Data {
 			if j >= maxDataCount {
 				continue
-			}
-
-			// Bounds check for divideValues to prevent panic
-			if j >= len(divideValues) {
+			} else if j >= len(divideValues) {
 				continue
-			}
-
-			// Skip invalid data
-			if !validateOHLCData(ohlc) {
-				allSeriesPoints[seriesIndex][j] = Point{X: divideValues[j], Y: math.MaxInt32} // Mark as null
+			} else if !validateOHLCData(ohlc) { // if invalid mark as null and skip
+				allSeriesPoints[seriesIndex][j] = Point{X: divideValues[j], Y: math.MaxInt32}
 				continue
 			}
 
@@ -238,7 +275,6 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 
 			// Calculate margins and positioning exactly like bar charts
 			var groupMargin, candleMargin, candleWidth int
-
 			if seriesList.len() == 1 {
 				// Single series: use simple centering
 				groupMargin = 0
@@ -286,7 +322,7 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 			isBullish := ohlc.Close >= ohlc.Open
 			candleStyle := series.CandleStyle
 			if candleStyle == "" {
-				candleStyle = CandleStyleFilled // Default
+				candleStyle = CandleStyleFilled
 			}
 
 			var bodyColor, wickColor Color
@@ -306,12 +342,11 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 			if series.ShowWicks != nil {
 				showWicks = *series.ShowWicks
 			}
+			wickWidth := opt.WickWidth
+			if wickWidth <= 0 {
+				wickWidth = 1.0
+			}
 			if showWicks {
-				wickWidth := opt.WickWidth
-				if wickWidth <= 0 {
-					wickWidth = 1.0 // Default wick width
-				}
-
 				if highY < bodyTop {
 					seriesPainter.LineStroke([]Point{
 						{X: centerX, Y: highY},
@@ -354,25 +389,21 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 			} else {
 				switch candleStyle {
 				case CandleStyleFilled:
-					// Always filled
 					seriesPainter.FilledRect(leftX, bodyTop, rightX, bodyBottom,
 						bodyColor, bodyColor, 0.0)
 
 				case CandleStyleTraditional:
-					if isBullish {
-						// Hollow body for bullish
+					if isBullish { // Hollow body for bullish
 						seriesPainter.FilledRect(leftX, bodyTop, rightX, bodyBottom,
-							ColorTransparent, bodyColor, 1.0)
-					} else {
-						// Filled body for bearish
+							ColorTransparent, bodyColor, wickWidth)
+					} else { // Filled body for bearish
 						seriesPainter.FilledRect(leftX, bodyTop, rightX, bodyBottom,
 							bodyColor, bodyColor, 0.0)
 					}
 
 				case CandleStyleOutline:
-					// Always outlined only
 					seriesPainter.FilledRect(leftX, bodyTop, rightX, bodyBottom,
-						ColorTransparent, bodyColor, 1.0)
+						ColorTransparent, bodyColor, wickWidth)
 				}
 			}
 
@@ -382,36 +413,14 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 				Y: closeY,
 			}
 
-			// Add label if enabled
+			// Add label if enabled (pattern logic is now handled in the label formatter)
 			if labelPainter != nil {
-				// Set up font style similar to bar chart
-				fontStyle := series.Label.FontStyle
-				if fontStyle.FontColor.IsZero() {
-					// Determine appropriate label color based on candlestick color
-					var testColor Color
-					if isBullish {
-						testColor = upColor
-					} else {
-						testColor = downColor
-					}
-					if !testColor.IsZero() {
-						if isLightColor(testColor) {
-							fontStyle.FontColor = defaultLightFontColor
-						} else {
-							fontStyle.FontColor = defaultDarkFontColor
-						}
-					}
-				}
-				if fontStyle.Font == nil {
-					fontStyle.Font = getPreferredFont(series.Label.FontStyle.Font)
-				}
-
 				labelPainter.Add(labelValue{
 					index:     j,          // Data point index (candlestick position), not series index
 					value:     ohlc.Close, // Use close price for label
 					x:         centerX,
 					y:         closeY,
-					fontStyle: fontStyle,
+					fontStyle: series.Label.FontStyle,
 					offset:    series.Label.Offset,
 				})
 			}
@@ -431,9 +440,8 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 		if len(series.MarkLine.Lines) > 0 {
 			markLineValueFormatter := getPreferredValueFormatter(series.MarkLine.ValueFormatter,
 				series.Label.ValueFormatter, opt.ValueFormatter)
-			seriesMarks := series.MarkLine.Lines.filterGlobal(false)
 
-			if len(seriesMarks) > 0 {
+			if seriesMarks := series.MarkLine.Lines.filterGlobal(false); len(seriesMarks) > 0 {
 				// Use close prices for mark line calculations
 				closeValues := ExtractClosePrices(*series)
 				seriesColor := opt.Theme.GetSeriesColor(seriesIndex)
@@ -454,13 +462,11 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 	// Handle mark points for each series
 	for seriesIndex := 0; seriesIndex < seriesList.len(); seriesIndex++ {
 		series := seriesList.getSeries(seriesIndex).(*CandlestickSeries)
-
 		if len(series.MarkPoint.Points) > 0 {
 			markPointValueFormatter := getPreferredValueFormatter(series.MarkPoint.ValueFormatter,
 				series.Label.ValueFormatter, opt.ValueFormatter)
-			seriesMarks := series.MarkPoint.Points.filterGlobal(false)
 
-			if len(seriesMarks) > 0 {
+			if seriesMarks := series.MarkPoint.Points.filterGlobal(false); len(seriesMarks) > 0 {
 				// Use close prices for mark point calculations
 				closeValues := ExtractClosePrices(*series)
 				seriesColor := opt.Theme.GetSeriesColor(seriesIndex)
