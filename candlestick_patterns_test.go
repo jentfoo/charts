@@ -69,20 +69,29 @@ func TestDojiPattern(t *testing.T) {
 	// Valid doji: open ≈ close
 	doji := OHLCData{Open: 100, High: 105, Low: 95, Close: 100.1}
 	data := []OHLCData{doji}
-	options := CandlestickPatternConfig{DojiThreshold: 0.01}
-	assert.True(t, detectDojiAt(data, 0, options))
+	for _, tt := range []struct {
+		name      string
+		threshold float64
+		expected  bool
+	}{
+		{"low", 0.009, false},
+		{"default", 0.01, true},
+		{"high", 0.011, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, detectDojiAt(data, 0, CandlestickPatternConfig{DojiThreshold: tt.threshold}))
+		})
+	}
 
 	// Invalid: body too large
 	notDoji := OHLCData{Open: 100, High: 105, Low: 95, Close: 103}
 	data = []OHLCData{notDoji}
-	options = CandlestickPatternConfig{DojiThreshold: 0.01}
-	assert.False(t, detectDojiAt(data, 0, options))
+	assert.False(t, detectDojiAt(data, 0, CandlestickPatternConfig{DojiThreshold: 0.01}))
 
 	// Invalid: invalid OHLC
 	invalidOHLC := OHLCData{Open: 100, High: 95, Low: 105, Close: 98}
 	data = []OHLCData{invalidOHLC}
-	options = CandlestickPatternConfig{DojiThreshold: 0.01}
-	assert.False(t, detectDojiAt(data, 0, options))
+	assert.False(t, detectDojiAt(data, 0, CandlestickPatternConfig{DojiThreshold: 0.01}))
 }
 
 func TestHammerPattern(t *testing.T) {
@@ -91,20 +100,29 @@ func TestHammerPattern(t *testing.T) {
 	// Valid hammer: long lower shadow, small body at top
 	hammer := OHLCData{Open: 105, High: 107, Low: 95, Close: 106}
 	data := []OHLCData{hammer}
-	options := CandlestickPatternConfig{ShadowRatio: 2.0}
-	assert.True(t, detectHammerAt(data, 0, options))
+	for _, tt := range []struct {
+		name     string
+		ratio    float64
+		expected bool
+	}{
+		{"low", 1.0, true},
+		{"default", 2.0, true},
+		{"high", 11.1, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, detectHammerAt(data, 0, CandlestickPatternConfig{ShadowRatio: tt.ratio}))
+		})
+	}
 
 	// Invalid: short lower shadow
 	notHammer := OHLCData{Open: 105, High: 107, Low: 104, Close: 106}
 	data = []OHLCData{notHammer}
-	options = CandlestickPatternConfig{ShadowRatio: 2.0}
-	assert.False(t, detectHammerAt(data, 0, options))
+	assert.False(t, detectHammerAt(data, 0, CandlestickPatternConfig{ShadowRatio: 2.0}))
 
 	// Invalid: long upper shadow
 	notHammer2 := OHLCData{Open: 95, High: 107, Low: 94, Close: 96}
 	data = []OHLCData{notHammer2}
-	options = CandlestickPatternConfig{ShadowRatio: 2.0}
-	assert.False(t, detectHammerAt(data, 0, options))
+	assert.False(t, detectHammerAt(data, 0, CandlestickPatternConfig{ShadowRatio: 2.0}))
 }
 
 func TestInvertedHammerPattern(t *testing.T) {
@@ -112,7 +130,19 @@ func TestInvertedHammerPattern(t *testing.T) {
 
 	// Valid inverted hammer: long upper shadow, small body at bottom
 	invertedHammer := OHLCData{Open: 95, High: 107, Low: 94, Close: 96}
-	assert.True(t, detectInvertedHammerAt([]OHLCData{invertedHammer}, 0, CandlestickPatternConfig{ShadowRatio: 2.0}))
+	for _, tt := range []struct {
+		name     string
+		ratio    float64
+		expected bool
+	}{
+		{"low", 1.0, true},
+		{"default", 2.0, true},
+		{"high", 11.1, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, detectInvertedHammerAt([]OHLCData{invertedHammer}, 0, CandlestickPatternConfig{ShadowRatio: tt.ratio}))
+		})
+	}
 
 	// Invalid: short upper shadow
 	notInvertedHammer := OHLCData{Open: 95, High: 97, Low: 94, Close: 96}
@@ -125,27 +155,46 @@ func TestEngulfingPattern(t *testing.T) {
 	// Test Bullish Engulfing
 	prevBearish := OHLCData{Open: 110, High: 112, Low: 105, Close: 106}
 	currentBullish := OHLCData{Open: 104, High: 115, Low: 103, Close: 114}
-
-	bullish := detectBullishEngulfingAt([]OHLCData{prevBearish, currentBullish}, 1, CandlestickPatternConfig{EngulfingMinSize: 0.8})
-	bearish := detectBearishEngulfingAt([]OHLCData{prevBearish, currentBullish}, 1, CandlestickPatternConfig{EngulfingMinSize: 0.8})
-	assert.True(t, bullish)
-	assert.False(t, bearish)
+	for _, tt := range []struct {
+		name     string
+		size     float64
+		expected bool
+	}{
+		{"low", 0.5, true},
+		{"default", 0.8, true},
+		{"high", 2.6, false},
+	} {
+		t.Run("bullish_"+tt.name, func(t *testing.T) {
+			detected := detectBullishEngulfingAt([]OHLCData{prevBearish, currentBullish}, 1, CandlestickPatternConfig{EngulfingMinSize: tt.size})
+			assert.Equal(t, tt.expected, detected)
+		})
+	}
+	assert.False(t, detectBearishEngulfingAt([]OHLCData{prevBearish, currentBullish}, 1, CandlestickPatternConfig{EngulfingMinSize: 0.8}))
 
 	// Test Bearish Engulfing
 	prevBullish := OHLCData{Open: 106, High: 112, Low: 105, Close: 110}
 	currentBearish := OHLCData{Open: 114, High: 115, Low: 103, Close: 104}
 
-	bullish = detectBullishEngulfingAt([]OHLCData{prevBullish, currentBearish}, 1, CandlestickPatternConfig{EngulfingMinSize: 0.8})
-	bearish = detectBearishEngulfingAt([]OHLCData{prevBullish, currentBearish}, 1, CandlestickPatternConfig{EngulfingMinSize: 0.8})
-	assert.False(t, bullish)
-	assert.True(t, bearish)
+	for _, tt := range []struct {
+		name     string
+		size     float64
+		expected bool
+	}{
+		{"low", 0.5, true},
+		{"default", 0.8, true},
+		{"high", 2.6, false},
+	} {
+		t.Run("bearish_"+tt.name, func(t *testing.T) {
+			detected := detectBearishEngulfingAt([]OHLCData{prevBullish, currentBearish}, 1, CandlestickPatternConfig{EngulfingMinSize: tt.size})
+			assert.Equal(t, tt.expected, detected)
+		})
+	}
+	assert.False(t, detectBullishEngulfingAt([]OHLCData{prevBullish, currentBearish}, 1, CandlestickPatternConfig{EngulfingMinSize: 0.8}))
 
 	// Test non-engulfing
 	nonEngulfing := OHLCData{Open: 107, High: 109, Low: 106, Close: 108}
-	bullish = detectBullishEngulfingAt([]OHLCData{prevBullish, nonEngulfing}, 1, CandlestickPatternConfig{EngulfingMinSize: 0.8})
-	bearish = detectBearishEngulfingAt([]OHLCData{prevBullish, nonEngulfing}, 1, CandlestickPatternConfig{EngulfingMinSize: 0.8})
-	assert.False(t, bullish)
-	assert.False(t, bearish)
+	assert.False(t, detectBullishEngulfingAt([]OHLCData{prevBullish, nonEngulfing}, 1, CandlestickPatternConfig{EngulfingMinSize: 0.8}))
+	assert.False(t, detectBearishEngulfingAt([]OHLCData{prevBullish, nonEngulfing}, 1, CandlestickPatternConfig{EngulfingMinSize: 0.8}))
 }
 
 func TestHaramiPatterns(t *testing.T) {
@@ -154,27 +203,46 @@ func TestHaramiPatterns(t *testing.T) {
 	// Test Bullish Harami
 	prevCandle := OHLCData{Open: 110, High: 115, Low: 95, Close: 98}      // Large bearish
 	currentCandle := OHLCData{Open: 102, High: 106, Low: 100, Close: 104} // Small bullish inside
-
-	bullishHarami := detectBullishHaramiAt([]OHLCData{prevCandle, currentCandle}, 1, CandlestickPatternConfig{EngulfingMinSize: 1.0 - 0.3})
-	bearishHarami := detectBearishHaramiAt([]OHLCData{prevCandle, currentCandle}, 1, CandlestickPatternConfig{EngulfingMinSize: 1.0 - 0.3})
-	assert.True(t, bullishHarami)
-	assert.False(t, bearishHarami)
+	for _, tt := range []struct {
+		name     string
+		size     float64
+		expected bool
+	}{
+		{"low", 1.0 - 0.5, true},
+		{"default", 1.0 - 0.3, true},
+		{"high", 1.0 - 0.15, false},
+	} {
+		t.Run("bullish_"+tt.name, func(t *testing.T) {
+			detected := detectBullishHaramiAt([]OHLCData{prevCandle, currentCandle}, 1, CandlestickPatternConfig{EngulfingMinSize: tt.size})
+			assert.Equal(t, tt.expected, detected)
+		})
+	}
+	assert.False(t, detectBearishHaramiAt([]OHLCData{prevCandle, currentCandle}, 1, CandlestickPatternConfig{EngulfingMinSize: 1.0 - 0.3}))
 
 	// Test Bearish Harami
 	prevCandle = OHLCData{Open: 98, High: 115, Low: 95, Close: 110}      // Large bullish
 	currentCandle = OHLCData{Open: 106, High: 108, Low: 102, Close: 104} // Small bearish inside
 
-	bullishHarami = detectBullishHaramiAt([]OHLCData{prevCandle, currentCandle}, 1, CandlestickPatternConfig{EngulfingMinSize: 1.0 - 0.3})
-	bearishHarami = detectBearishHaramiAt([]OHLCData{prevCandle, currentCandle}, 1, CandlestickPatternConfig{EngulfingMinSize: 1.0 - 0.3})
-	assert.False(t, bullishHarami)
-	assert.True(t, bearishHarami)
+	for _, tt := range []struct {
+		name     string
+		size     float64
+		expected bool
+	}{
+		{"low", 1.0 - 0.5, true},
+		{"default", 1.0 - 0.3, true},
+		{"high", 1.0 - 0.15, false},
+	} {
+		t.Run("bearish_"+tt.name, func(t *testing.T) {
+			detected := detectBearishHaramiAt([]OHLCData{prevCandle, currentCandle}, 1, CandlestickPatternConfig{EngulfingMinSize: tt.size})
+			assert.Equal(t, tt.expected, detected)
+		})
+	}
+	assert.False(t, detectBullishHaramiAt([]OHLCData{prevCandle, currentCandle}, 1, CandlestickPatternConfig{EngulfingMinSize: 1.0 - 0.3}))
 
 	// Test non-harami (current candle too large)
 	currentCandle = OHLCData{Open: 100, High: 112, Low: 96, Close: 108} // Too large
-	bullishHarami = detectBullishHaramiAt([]OHLCData{prevCandle, currentCandle}, 1, CandlestickPatternConfig{EngulfingMinSize: 1.0 - 0.3})
-	bearishHarami = detectBearishHaramiAt([]OHLCData{prevCandle, currentCandle}, 1, CandlestickPatternConfig{EngulfingMinSize: 1.0 - 0.3})
-	assert.False(t, bullishHarami)
-	assert.False(t, bearishHarami)
+	assert.False(t, detectBullishHaramiAt([]OHLCData{prevCandle, currentCandle}, 1, CandlestickPatternConfig{EngulfingMinSize: 1.0 - 0.3}))
+	assert.False(t, detectBearishHaramiAt([]OHLCData{prevCandle, currentCandle}, 1, CandlestickPatternConfig{EngulfingMinSize: 1.0 - 0.3}))
 }
 
 func TestShootingStarPattern(t *testing.T) {
@@ -182,7 +250,19 @@ func TestShootingStarPattern(t *testing.T) {
 
 	// Valid shooting star: small body at bottom, long upper shadow
 	shootingStar := OHLCData{Open: 106, High: 125, Low: 105, Close: 107}
-	assert.True(t, detectShootingStarAt([]OHLCData{shootingStar}, 0, CandlestickPatternConfig{ShadowRatio: 2.0}))
+	for _, tt := range []struct {
+		name     string
+		ratio    float64
+		expected bool
+	}{
+		{"low", 1.0, true},
+		{"default", 2.0, true},
+		{"high", 18.1, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, detectShootingStarAt([]OHLCData{shootingStar}, 0, CandlestickPatternConfig{ShadowRatio: tt.ratio}))
+		})
+	}
 
 	// Invalid: body not near bottom
 	notShootingStar := OHLCData{Open: 115, High: 125, Low: 105, Close: 117}
@@ -195,38 +275,58 @@ func TestShootingStarPattern(t *testing.T) {
 
 func TestGravestoneDojiPattern(t *testing.T) {
 	t.Parallel()
-
-	opt := CandlestickPatternConfig{DojiThreshold: 0.01, ShadowRatio: 2.0}
-
-	// Valid gravestone doji: doji with long upper shadow
 	gravestoneDoji := OHLCData{Open: 108, High: 120, Low: 107, Close: 108.1}
-	assert.True(t, detectGravestoneDojiAt([]OHLCData{gravestoneDoji}, 0, opt))
+	for _, tt := range []struct {
+		name      string
+		threshold float64
+		shadow    float64
+		expected  bool
+	}{
+		{"low_threshold", 0.004, 2.0, false},
+		{"default", 0.01, 2.0, true},
+		{"high_shadow", 0.01, 200, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			opt := CandlestickPatternConfig{DojiThreshold: tt.threshold, ShadowRatio: tt.shadow}
+			assert.Equal(t, tt.expected, detectGravestoneDojiAt([]OHLCData{gravestoneDoji}, 0, opt))
+		})
+	}
 
 	// Invalid: not a doji (body too large)
 	notDoji := OHLCData{Open: 108, High: 120, Low: 107, Close: 115}
-	assert.False(t, detectGravestoneDojiAt([]OHLCData{notDoji}, 0, opt))
+	assert.False(t, detectGravestoneDojiAt([]OHLCData{notDoji}, 0, CandlestickPatternConfig{DojiThreshold: 0.01, ShadowRatio: 2.0}))
 
 	// Invalid: doji but no long upper shadow
 	dojiNoShadow := OHLCData{Open: 108, High: 109, Low: 107, Close: 108.1}
-	assert.False(t, detectGravestoneDojiAt([]OHLCData{dojiNoShadow}, 0, opt))
+	assert.False(t, detectGravestoneDojiAt([]OHLCData{dojiNoShadow}, 0, CandlestickPatternConfig{DojiThreshold: 0.01, ShadowRatio: 2.0}))
 }
 
 func TestDragonflyDojiPattern(t *testing.T) {
 	t.Parallel()
-
-	opt := CandlestickPatternConfig{DojiThreshold: 0.01, ShadowRatio: 2.0}
-
-	// Valid dragonfly doji: doji with long lower shadow
 	dragonflyDoji := OHLCData{Open: 109, High: 110, Low: 90, Close: 108.9}
-	assert.True(t, detectDragonflyDojiAt([]OHLCData{dragonflyDoji}, 0, opt))
+	for _, tt := range []struct {
+		name      string
+		threshold float64
+		shadow    float64
+		expected  bool
+	}{
+		{"low_threshold", 0.004, 2.0, false},
+		{"default", 0.01, 2.0, true},
+		{"high_shadow", 0.01, 200, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			opt := CandlestickPatternConfig{DojiThreshold: tt.threshold, ShadowRatio: tt.shadow}
+			assert.Equal(t, tt.expected, detectDragonflyDojiAt([]OHLCData{dragonflyDoji}, 0, opt))
+		})
+	}
 
 	// Invalid: not a doji
 	notDoji := OHLCData{Open: 109, High: 110, Low: 90, Close: 102}
-	assert.False(t, detectDragonflyDojiAt([]OHLCData{notDoji}, 0, opt))
+	assert.False(t, detectDragonflyDojiAt([]OHLCData{notDoji}, 0, CandlestickPatternConfig{DojiThreshold: 0.01, ShadowRatio: 2.0}))
 
 	// Invalid: doji but no long lower shadow
 	dojiNoShadow := OHLCData{Open: 109, High: 110, Low: 108, Close: 108.9}
-	assert.False(t, detectDragonflyDojiAt([]OHLCData{dojiNoShadow}, 0, opt))
+	assert.False(t, detectDragonflyDojiAt([]OHLCData{dojiNoShadow}, 0, CandlestickPatternConfig{DojiThreshold: 0.01, ShadowRatio: 2.0}))
 }
 
 func TestMorningStarPattern(t *testing.T) {
@@ -358,24 +458,43 @@ func TestMarubozuPattern(t *testing.T) {
 
 	// Bullish Marubozu - no shadows
 	bullishMarubozu := OHLCData{Open: 100, High: 120, Low: 100, Close: 120}
-	bullish := detectBullishMarubozuAt([]OHLCData{bullishMarubozu}, 0, CandlestickPatternConfig{ShadowTolerance: 0.01})
-	bearish := detectBearishMarubozuAt([]OHLCData{bullishMarubozu}, 0, CandlestickPatternConfig{ShadowTolerance: 0.01})
-	assert.True(t, bullish)
-	assert.False(t, bearish)
+	for _, tt := range []struct {
+		tol      float64
+		expected bool
+	}{
+		{0.005, true},
+		{0.01, true},
+		{0.02, true},
+	} {
+		t.Run("bullish_tol_"+strconv.FormatFloat(tt.tol, 'f', 3, 64), func(t *testing.T) {
+			detected := detectBullishMarubozuAt([]OHLCData{bullishMarubozu}, 0, CandlestickPatternConfig{ShadowTolerance: tt.tol})
+			assert.Equal(t, tt.expected, detected)
+		})
+	}
+	assert.False(t, detectBearishMarubozuAt([]OHLCData{bullishMarubozu}, 0, CandlestickPatternConfig{ShadowTolerance: 0.01}))
 
 	// Bearish Marubozu - no shadows
 	bearishMarubozu := OHLCData{Open: 120, High: 120, Low: 100, Close: 100}
-	bullish = detectBullishMarubozuAt([]OHLCData{bearishMarubozu}, 0, CandlestickPatternConfig{ShadowTolerance: 0.01})
-	bearish = detectBearishMarubozuAt([]OHLCData{bearishMarubozu}, 0, CandlestickPatternConfig{ShadowTolerance: 0.01})
-	assert.False(t, bullish)
-	assert.True(t, bearish)
+	for _, tt := range []struct {
+		tol      float64
+		expected bool
+	}{
+		{0.005, true},
+		{0.01, true},
+		{0.02, true},
+	} {
+		t.Run("bearish_tol_"+strconv.FormatFloat(tt.tol, 'f', 3, 64), func(t *testing.T) {
+			detected := detectBearishMarubozuAt([]OHLCData{bearishMarubozu}, 0, CandlestickPatternConfig{ShadowTolerance: tt.tol})
+			assert.Equal(t, tt.expected, detected)
+		})
+	}
+	assert.False(t, detectBullishMarubozuAt([]OHLCData{bearishMarubozu}, 0, CandlestickPatternConfig{ShadowTolerance: 0.01}))
 
 	// Not a marubozu - has significant shadows
 	notMarubozu := OHLCData{Open: 105, High: 125, Low: 95, Close: 115}
-	bullish = detectBullishMarubozuAt([]OHLCData{notMarubozu}, 0, CandlestickPatternConfig{ShadowTolerance: 0.01})
-	bearish = detectBearishMarubozuAt([]OHLCData{notMarubozu}, 0, CandlestickPatternConfig{ShadowTolerance: 0.01})
-	assert.False(t, bullish)
-	assert.False(t, bearish)
+	assert.False(t, detectBullishMarubozuAt([]OHLCData{notMarubozu}, 0, CandlestickPatternConfig{ShadowTolerance: 0.01}))
+	assert.False(t, detectBearishMarubozuAt([]OHLCData{notMarubozu}, 0, CandlestickPatternConfig{ShadowTolerance: 0.01}))
+	assert.True(t, detectBullishMarubozuAt([]OHLCData{notMarubozu}, 0, CandlestickPatternConfig{ShadowTolerance: 0.7}))
 }
 
 func TestSpinningTopPattern(t *testing.T) {
@@ -383,18 +502,27 @@ func TestSpinningTopPattern(t *testing.T) {
 
 	// Classic spinning top - small body, long shadows
 	spinningTop := OHLCData{Open: 110, High: 125, Low: 95, Close: 112}
-	detected := detectSpinningTopAt([]OHLCData{spinningTop}, 0, CandlestickPatternConfig{BodySizeRatio: 0.3})
-	assert.True(t, detected)
+	for _, tt := range []struct {
+		name     string
+		ratio    float64
+		expected bool
+	}{
+		{"low", 0.05, false},
+		{"default", 0.3, true},
+		{"high", 0.4, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, detectSpinningTopAt([]OHLCData{spinningTop}, 0, CandlestickPatternConfig{BodySizeRatio: tt.ratio}))
+		})
+	}
 
 	// Not spinning top - large body
 	largeBody := OHLCData{Open: 100, High: 125, Low: 95, Close: 120}
-	detected = detectSpinningTopAt([]OHLCData{largeBody}, 0, CandlestickPatternConfig{BodySizeRatio: 0.3})
-	assert.False(t, detected)
+	assert.False(t, detectSpinningTopAt([]OHLCData{largeBody}, 0, CandlestickPatternConfig{BodySizeRatio: 0.3}))
 
 	// Not spinning top - shadows too short relative to body
 	shortShadows := OHLCData{Open: 110, High: 110.5, Low: 109.5, Close: 111}
-	detected = detectSpinningTopAt([]OHLCData{shortShadows}, 0, CandlestickPatternConfig{BodySizeRatio: 0.3})
-	assert.False(t, detected)
+	assert.False(t, detectSpinningTopAt([]OHLCData{shortShadows}, 0, CandlestickPatternConfig{BodySizeRatio: 0.3}))
 }
 
 func TestDetectLongLeggedDoji(t *testing.T) {
@@ -443,6 +571,22 @@ func TestDetectLongLeggedDoji(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+
+	base := OHLCData{Open: 100, High: 115, Low: 85, Close: 100.2}
+	for _, tt := range []struct {
+		name      string
+		threshold float64
+		expected  bool
+	}{
+		{"low", 0.005, false},
+		{"default", 0.01, true},
+		{"high", 0.02, true},
+	} {
+		t.Run("threshold_"+tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, detectLongLeggedDojiAt([]OHLCData{base}, 0, CandlestickPatternConfig{DojiThreshold: tt.threshold, ShadowRatio: 3.0}))
+		})
+	}
+	assert.False(t, detectLongLeggedDojiAt([]OHLCData{base}, 0, CandlestickPatternConfig{DojiThreshold: 0.01, ShadowRatio: 80}))
 }
 
 func TestDetectHighWave(t *testing.T) {
@@ -479,6 +623,21 @@ func TestDetectHighWave(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := detectHighWaveAt([]OHLCData{tt.ohlc}, 0, CandlestickPatternConfig{ShadowRatio: 3.0})
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+
+	base := OHLCData{Open: 100, High: 112, Low: 88, Close: 102}
+	for _, tt := range []struct {
+		name     string
+		ratio    float64
+		expected bool
+	}{
+		{"low", 2.0, true},
+		{"default", 3.0, true},
+		{"high", 12.0, false},
+	} {
+		t.Run("ratio_"+tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, detectHighWaveAt([]OHLCData{base}, 0, CandlestickPatternConfig{ShadowRatio: tt.ratio}))
 		})
 	}
 }
@@ -530,6 +689,35 @@ func TestDetectBeltHold(t *testing.T) {
 			bear := detectBearishBeltHoldAt([]OHLCData{tt.ohlc}, 0, CandlestickPatternConfig{ShadowTolerance: 0.02})
 			assert.Equal(t, tt.expectBull, bull)
 			assert.Equal(t, tt.expectBear, bear)
+		})
+	}
+
+	bullOHLC := OHLCData{Open: 100, High: 110, Low: 99.8, Close: 109}
+	for _, tt := range []struct {
+		name     string
+		tol      float64
+		expected bool
+	}{
+		{"low", 0.01, false},
+		{"default", 0.02, true},
+		{"high", 0.03, true},
+	} {
+		t.Run("bull_tol_"+tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, detectBullishBeltHoldAt([]OHLCData{bullOHLC}, 0, CandlestickPatternConfig{ShadowTolerance: tt.tol}))
+		})
+	}
+	bearOHLC := OHLCData{Open: 110, High: 110.2, Low: 100, Close: 101}
+	for _, tt := range []struct {
+		name     string
+		tol      float64
+		expected bool
+	}{
+		{"low", 0.01, false},
+		{"default", 0.02, true},
+		{"high", 0.03, true},
+	} {
+		t.Run("bear_tol_"+tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, detectBearishBeltHoldAt([]OHLCData{bearOHLC}, 0, CandlestickPatternConfig{ShadowTolerance: tt.tol}))
 		})
 	}
 }
