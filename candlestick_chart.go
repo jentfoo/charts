@@ -110,16 +110,16 @@ type CandlestickChartOption struct {
 	Title TitleOption
 	// Legend contains options for the data legend.
 	Legend LegendOption
-	// CandleWidth specifies the default width of candlestick bodies as a ratio (0.0-1.0).
+	// CandleWidth sets body width ratio 0.0–1.0 (default 0.8).
 	CandleWidth float64
 	// ShowWicks controls whether high-low wicks are displayed by default. When nil, wicks are shown.
 	// Individual series can override this setting.
 	ShowWicks *bool
-	// WickWidth is the stroke width for high-low wicks in pixels.
+	// WickWidth sets wick stroke width in pixels (default 1.0).
 	WickWidth float64
-	// CandleMargin specifies the margin between candlesticks as a ratio (0.0-1.0).
+	// CandleMargin sets spacing ratio 0.0–1.0 with default auto-spacing.
 	CandleMargin *float64
-	// ValueFormatter defines how float values are rendered to strings, notably for numeric axis labels.
+	// ValueFormatter formats float values (default defaultValueFormatter).
 	ValueFormatter ValueFormatter
 }
 
