@@ -198,8 +198,8 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 	// Use autoDivide for positioning
 	divideValues := result.xaxisRange.autoDivide()
 
-	// Calculate proper xValues for trendlines (similar to line/scatter charts)
-	xValues := boundaryGapAxisPositions(seriesPainter.Width(), false, maxDataCount)
+	// Center positions for each series index
+	seriesCenterValues := make([][]int, seriesList.len())
 
 	// render list must start with the markPointPainter, as it can influence label painters (if enabled)
 	markPointPainter := newMarkPointPainter(seriesPainter)
@@ -256,19 +256,10 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 		seriesOpenPoints[seriesIndex] = make([]Point, len(series.Data))
 		seriesHighPoints[seriesIndex] = make([]Point, len(series.Data))
 		seriesLowPoints[seriesIndex] = make([]Point, len(series.Data))
+		seriesCenterValues[seriesIndex] = make([]int, len(series.Data))
 		// Render each candlestick in this series
 		for j, ohlc := range series.Data {
-			if j >= maxDataCount {
-				continue
-			} else if j >= len(divideValues) {
-				continue
-			} else if !validateOHLCData(ohlc) { // if invalid mark as null and skip
-				// Mark all OHLC points as invalid
-				invalidPoint := Point{X: divideValues[j], Y: math.MaxInt32}
-				seriesClosePoints[seriesIndex][j] = invalidPoint
-				seriesOpenPoints[seriesIndex][j] = invalidPoint
-				seriesHighPoints[seriesIndex][j] = invalidPoint
-				seriesLowPoints[seriesIndex][j] = invalidPoint
+			if j >= maxDataCount || j >= len(divideValues) {
 				continue
 			}
 
@@ -318,6 +309,17 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 				// x = divideValues[j] + margin + index*(barWidth+barMargin)
 				x := divideValues[j] + groupMargin + seriesIndex*(candleWidth+candleMargin)
 				centerX = x + candleWidth/2
+			}
+			seriesCenterValues[seriesIndex][j] = centerX
+
+			if !validateOHLCData(ohlc) { // if invalid mark as null and skip
+				// Mark all OHLC points as invalid
+				invalidPoint := Point{X: centerX, Y: math.MaxInt32}
+				seriesClosePoints[seriesIndex][j] = invalidPoint
+				seriesOpenPoints[seriesIndex][j] = invalidPoint
+				seriesHighPoints[seriesIndex][j] = invalidPoint
+				seriesLowPoints[seriesIndex][j] = invalidPoint
+				continue
 			}
 
 			leftX := centerX - candleWidth/2
@@ -536,7 +538,7 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 				}
 				trendLinePainter.add(trendLineRenderOption{
 					defaultStrokeColor: opt.Theme.GetSeriesTrendColor(seriesIndex),
-					xValues:            xValues,
+					xValues:            seriesCenterValues[seriesIndex],
 					seriesValues:       values,
 					axisRange:          yRange,
 					trends:             component.trendLines,
