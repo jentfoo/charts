@@ -2147,6 +2147,7 @@ func validateOHLCClose(ohlc OHLCData) bool {
 	return ohlc.High >= ohlc.Close && ohlc.Low <= ohlc.Close
 }
 
+// CandlestickSeriesList holds multiple CandlestickSeries values.
 type CandlestickSeriesList []CandlestickSeries
 
 func (k CandlestickSeriesList) names() []string {
