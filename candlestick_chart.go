@@ -226,24 +226,22 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 		}
 		yRange := result.yaxisRanges[series.YAxisIndex]
 
-		// Create labelPainter for this series if labels are enabled OR patterns are configured
-		var labelPainter *seriesLabelPainter
-		if flagIs(true, series.Label.Show) || series.PatternConfig != nil {
-			// If patterns are configured, create an enhanced label formatter
-			var labelToUse SeriesLabel
-			var patternMap map[int][]PatternDetectionResult
-			if series.PatternConfig != nil {
-				patternMap = scanForCandlestickPatterns(series.Data, *series.PatternConfig)
-			}
-			if len(patternMap) > 0 {
-				labelToUse = series.Label // shallow copy
-				labelToUse.LabelFormatter = createPatternAwareLabelFormatter(series, seriesIndex, opt.Theme, patternMap)
-			} else {
-				// No patterns, use original label
-				labelToUse = series.Label
-			}
+		// pre-compute patterns for this series
+		var patternMap map[int][]PatternDetectionResult
+		if series.PatternConfig != nil {
+			patternMap = scanForCandlestickPatterns(series.Data, *series.PatternConfig)
+		}
 
-			labelPainter = newSeriesLabelPainter(seriesPainter, seriesNames, labelToUse, opt.Theme, opt.Padding.Right)
+		// Create labelPainter only when labels are enabled or patterns were detected
+		var labelPainter *seriesLabelPainter
+		if flagIs(true, series.Label.Show) || len(patternMap) > 0 {
+			if len(patternMap) > 0 {
+				labelCopy := series.Label
+				labelCopy.LabelFormatter = createPatternAwareLabelFormatter(series, seriesIndex, opt.Theme, patternMap)
+				labelPainter = newSeriesLabelPainter(seriesPainter, seriesNames, labelCopy, opt.Theme, opt.Padding.Right)
+			} else {
+				labelPainter = newSeriesLabelPainter(seriesPainter, seriesNames, series.Label, opt.Theme, opt.Padding.Right)
+			}
 			rendererList = append(rendererList, labelPainter)
 		}
 		allLabelPainters[seriesIndex] = labelPainter
