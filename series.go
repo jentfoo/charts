@@ -2243,24 +2243,41 @@ func (k CandlestickSeriesList) ToGenericSeriesList() GenericSeriesList {
 	return result
 }
 
-// CandlestickSeriesOption provides series customization for NewSeriesListCandlestick.
+// CandlestickSeriesOption configures optional elements when building
+// candlestick series.
 type CandlestickSeriesOption struct {
-	Label          SeriesLabel
-	Names          []string
-	OpenMarkPoint  SeriesMarkPoint
-	OpenMarkLine   SeriesMarkLine
-	OpenTrendLine  []SeriesTrendLine
-	HighMarkPoint  SeriesMarkPoint
-	HighMarkLine   SeriesMarkLine
-	HighTrendLine  []SeriesTrendLine
-	LowMarkPoint   SeriesMarkPoint
-	LowMarkLine    SeriesMarkLine
-	LowTrendLine   []SeriesTrendLine
+	// Label styles the series labels.
+	Label SeriesLabel
+	// Names provide data names for each series.
+	Names []string
+	// OpenMarkPoint marks open prices.
+	OpenMarkPoint SeriesMarkPoint
+	// OpenMarkLine draws reference lines for open prices.
+	OpenMarkLine SeriesMarkLine
+	// OpenTrendLine adds trend lines based on opens.
+	OpenTrendLine []SeriesTrendLine
+	// HighMarkPoint marks high prices.
+	HighMarkPoint SeriesMarkPoint
+	// HighMarkLine draws reference lines for highs.
+	HighMarkLine SeriesMarkLine
+	// HighTrendLine adds trend lines based on highs.
+	HighTrendLine []SeriesTrendLine
+	// LowMarkPoint marks low prices.
+	LowMarkPoint SeriesMarkPoint
+	// LowMarkLine draws reference lines for lows.
+	LowMarkLine SeriesMarkLine
+	// LowTrendLine adds trend lines based on lows.
+	LowTrendLine []SeriesTrendLine
+	// CloseMarkPoint marks closing prices.
 	CloseMarkPoint SeriesMarkPoint
-	CloseMarkLine  SeriesMarkLine
+	// CloseMarkLine draws reference lines for closes.
+	CloseMarkLine SeriesMarkLine
+	// CloseTrendLine adds trend lines based on closes.
 	CloseTrendLine []SeriesTrendLine
-	CandleStyle    CandleStyle
-	PatternConfig  *CandlestickPatternConfig
+	// CandleStyle sets the drawing style for candles.
+	CandleStyle string
+	// PatternConfig configures candlestick pattern detection.
+	PatternConfig *CandlestickPatternConfig
 }
 
 // NewSeriesListCandlestick builds a SeriesList for candlestick charts from OHLC data.
