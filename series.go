@@ -2044,9 +2044,12 @@ type OHLCData struct {
 type CandleStyle string
 
 const (
-	CandleStyleFilled      CandleStyle = "filled"      // Always filled bodies
-	CandleStyleTraditional CandleStyle = "traditional" // Hollow bullish, filled bearish
-	CandleStyleOutline     CandleStyle = "outline"     // Always outlined only
+	// CandleStyleFilled always fills bodies.
+	CandleStyleFilled CandleStyle = "filled"
+	// CandleStyleTraditional uses hollow bullish, filled bearish.
+	CandleStyleTraditional CandleStyle = "traditional"
+	// CandleStyleOutline always outlines only.
+	CandleStyleOutline CandleStyle = "outline"
 )
 
 // CandlestickSeries references OHLC data for candlestick charts.
@@ -2275,7 +2278,7 @@ type CandlestickSeriesOption struct {
 	// CloseTrendLine adds trend lines based on closes.
 	CloseTrendLine []SeriesTrendLine
 	// CandleStyle sets the drawing style for candles.
-	CandleStyle string
+	CandleStyle CandleStyle
 	// PatternConfig configures candlestick pattern detection.
 	PatternConfig *CandlestickPatternConfig
 }
