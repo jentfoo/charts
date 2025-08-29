@@ -181,6 +181,8 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 	candleWidthRatio := opt.CandleWidth
 	if candleWidthRatio <= 0 {
 		candleWidthRatio = 0.8 // Default 80% of available space
+	} else if candleWidthRatio > 1 {
+		candleWidthRatio = 1
 	}
 	candleWidth := int(float64(width) * candleWidthRatio / float64(maxDataCount))
 	if candleWidth < 1 {

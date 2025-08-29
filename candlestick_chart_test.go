@@ -731,6 +731,25 @@ func TestRenderCandlestickMixError(t *testing.T) {
 	assert.Contains(t, err.Error(), "candlestick can not mix other charts")
 }
 
+func TestCandlestickCandleWidthClamped(t *testing.T) {
+	t.Parallel()
+
+	opt := makeMinimalCandlestickChartOption()
+	opt.CandleWidth = 1
+	base := NewPainter(PainterOptions{OutputFormat: ChartOutputSVG, Width: 800, Height: 600})
+	require.NoError(t, base.CandlestickChart(opt))
+	expected, err := base.Bytes()
+	require.NoError(t, err)
+
+	opt.CandleWidth = 2
+	over := NewPainter(PainterOptions{OutputFormat: ChartOutputSVG, Width: 800, Height: 600})
+	require.NoError(t, over.CandlestickChart(opt))
+	actual, err := over.Bytes()
+	require.NoError(t, err)
+
+	assert.Equal(t, string(expected), string(actual))
+}
+
 func validateCandlestickChartRender(t *testing.T, svgP, pngP *Painter, opt CandlestickChartOption, expectedSVG string, expectedCRC uint32) {
 	t.Helper()
 
