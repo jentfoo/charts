@@ -58,7 +58,7 @@ const (
 	CandlestickPatternEveningStar = "evening_star"
 )
 
-// PatternFormatter allows custom formatting of detected patterns
+// PatternFormatter allows custom formatting of detected patterns.
 type PatternFormatter func(patterns []PatternDetectionResult, seriesName string, value float64) (string, *LabelStyle)
 
 // CandlestickPatternConfig configures automatic pattern detection.
@@ -1099,7 +1099,7 @@ func getPatternDisplayName(patternName string) string {
 // PATTERN CONFIGURATION PRESETS
 // =============================================================================
 
-// PatternsAll enables all standard patterns (replaces user labels)
+// PatternsAll enables all standard patterns.
 func PatternsAll() *CandlestickPatternConfig {
 	return &CandlestickPatternConfig{
 		ReplaceSeriesLabel: true,
