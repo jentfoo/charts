@@ -352,7 +352,7 @@ func TestPatternIntegration(t *testing.T) {
 	assert.NotEmpty(t, seriesWithPatterns.PatternConfig.EnabledPatterns)
 }
 
-func TestMarubozuPatern(t *testing.T) {
+func TestMarubozuPattern(t *testing.T) {
 	t.Parallel()
 
 	// Bullish Marubozu - no shadows
@@ -453,22 +453,22 @@ func TestDetectHighWave(t *testing.T) {
 		expected bool
 	}{
 		{
-			name:     "valid high wave",
+			name:     "valid_high_wave",
 			ohlc:     OHLCData{Open: 100, High: 112, Low: 88, Close: 102},
 			expected: true,
 		},
 		{
-			name:     "body too large",
+			name:     "body_too_large",
 			ohlc:     OHLCData{Open: 100, High: 112, Low: 88, Close: 108},
 			expected: false,
 		},
 		{
-			name:     "shadows too short",
+			name:     "shadows_too_short",
 			ohlc:     OHLCData{Open: 100, High: 103, Low: 97, Close: 102},
 			expected: false,
 		},
 		{
-			name:     "asymmetric (no lower shadow)",
+			name:     "asymmetric_no_lower_shadow",
 			ohlc:     OHLCData{Open: 100, High: 115, Low: 100, Close: 102},
 			expected: false,
 		},
@@ -492,31 +492,31 @@ func TestDetectBeltHold(t *testing.T) {
 		expectBear bool
 	}{
 		{
-			name:       "bullish belt hold",
+			name:       "bullish_belt_hold",
 			ohlc:       OHLCData{Open: 100, High: 110, Low: 99.8, Close: 109},
 			expectBull: true,
 			expectBear: false,
 		},
 		{
-			name:       "bearish belt hold",
+			name:       "bearish_belt_hold",
 			ohlc:       OHLCData{Open: 110, High: 110.2, Low: 100, Close: 101},
 			expectBull: false,
 			expectBear: true,
 		},
 		{
-			name:       "body too small",
+			name:       "body_too_small",
 			ohlc:       OHLCData{Open: 100, High: 110, Low: 90, Close: 105},
 			expectBull: false,
 			expectBear: false,
 		},
 		{
-			name:       "too much shadow on open side (bullish attempt)",
+			name:       "too_much_shadow_on_open_side_bullish_attempt",
 			ohlc:       OHLCData{Open: 105, High: 110, Low: 90, Close: 109},
 			expectBull: false,
 			expectBear: false,
 		},
 		{
-			name:       "normal candle",
+			name:       "normal_candle",
 			ohlc:       OHLCData{Open: 103, High: 107, Low: 100, Close: 105},
 			expectBull: false,
 			expectBear: false,
