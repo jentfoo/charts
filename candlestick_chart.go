@@ -208,7 +208,10 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 	seriesNames := seriesList.names()
 
 	// Store points and label painters for each series
-	allSeriesPoints := make([][]Point, seriesList.len())
+	seriesClosePoints := make([][]Point, seriesList.len())
+	seriesOpenPoints := make([][]Point, seriesList.len())
+	seriesHighPoints := make([][]Point, seriesList.len())
+	seriesLowPoints := make([][]Point, seriesList.len())
 	allLabelPainters := make([]*seriesLabelPainter, seriesList.len())
 
 	// Render each series
@@ -246,8 +249,11 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 		// Get series-specific up/down colors
 		upColor, downColor := opt.Theme.GetSeriesUpDownColors(seriesIndex)
 
-		// Initialize points array for this series
-		allSeriesPoints[seriesIndex] = make([]Point, len(series.Data))
+		// Initialize point arrays for all OHLC values for this series
+		seriesClosePoints[seriesIndex] = make([]Point, len(series.Data))
+		seriesOpenPoints[seriesIndex] = make([]Point, len(series.Data))
+		seriesHighPoints[seriesIndex] = make([]Point, len(series.Data))
+		seriesLowPoints[seriesIndex] = make([]Point, len(series.Data))
 		// Render each candlestick in this series
 		for j, ohlc := range series.Data {
 			if j >= maxDataCount {
@@ -255,7 +261,12 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 			} else if j >= len(divideValues) {
 				continue
 			} else if !validateOHLCData(ohlc) { // if invalid mark as null and skip
-				allSeriesPoints[seriesIndex][j] = Point{X: divideValues[j], Y: math.MaxInt32}
+				// Mark all OHLC points as invalid
+				invalidPoint := Point{X: divideValues[j], Y: math.MaxInt32}
+				seriesClosePoints[seriesIndex][j] = invalidPoint
+				seriesOpenPoints[seriesIndex][j] = invalidPoint
+				seriesHighPoints[seriesIndex][j] = invalidPoint
+				seriesLowPoints[seriesIndex][j] = invalidPoint
 				continue
 			}
 
@@ -407,11 +418,11 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 				}
 			}
 
-			// Store point for mark points (use close price position)
-			allSeriesPoints[seriesIndex][j] = Point{
-				X: centerX,
-				Y: closeY,
-			}
+			// Store points for all OHLC values for mark points
+			seriesClosePoints[seriesIndex][j] = Point{X: centerX, Y: closeY}
+			seriesOpenPoints[seriesIndex][j] = Point{X: centerX, Y: openY}
+			seriesHighPoints[seriesIndex][j] = Point{X: centerX, Y: highY}
+			seriesLowPoints[seriesIndex][j] = Point{X: centerX, Y: lowY}
 
 			// Add label if enabled (pattern logic is now handled in the label formatter)
 			if labelPainter != nil {
@@ -427,7 +438,7 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 		}
 	}
 
-	// Handle mark lines for each series
+	// Handle mark lines, mark points, and trend lines for each series and OHLC component
 	for seriesIndex := 0; seriesIndex < seriesList.len(); seriesIndex++ {
 		series := seriesList.getSeries(seriesIndex).(*CandlestickSeries)
 
@@ -436,75 +447,100 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 			continue // Skip this series if YAxisIndex is out of bounds
 		}
 		yRange := result.yaxisRanges[series.YAxisIndex]
+		seriesColor := opt.Theme.GetSeriesColor(seriesIndex)
 
-		if len(series.MarkLine.Lines) > 0 {
-			markLineValueFormatter := getPreferredValueFormatter(series.MarkLine.ValueFormatter,
-				series.Label.ValueFormatter, opt.ValueFormatter)
+		ohlcComponents := []struct {
+			markLine    SeriesMarkLine
+			markPoint   SeriesMarkPoint
+			trendLines  []SeriesTrendLine
+			extractFunc func(*CandlestickSeries) []float64
+			points      []Point
+		}{
+			{
+				markLine:    series.OpenMarkLine,
+				markPoint:   series.OpenMarkPoint,
+				trendLines:  series.OpenTrendLine,
+				extractFunc: (*CandlestickSeries).ExtractOpenPrices,
+				points:      seriesOpenPoints[seriesIndex],
+			},
+			{
+				markLine:    series.HighMarkLine,
+				markPoint:   series.HighMarkPoint,
+				trendLines:  series.HighTrendLine,
+				extractFunc: (*CandlestickSeries).ExtractHighPrices,
+				points:      seriesHighPoints[seriesIndex],
+			},
+			{
+				markLine:    series.LowMarkLine,
+				markPoint:   series.LowMarkPoint,
+				trendLines:  series.LowTrendLine,
+				extractFunc: (*CandlestickSeries).ExtractLowPrices,
+				points:      seriesLowPoints[seriesIndex],
+			},
+			{
+				markLine:    series.CloseMarkLine,
+				markPoint:   series.CloseMarkPoint,
+				trendLines:  series.CloseTrendLine,
+				extractFunc: (*CandlestickSeries).ExtractClosePrices,
+				points:      seriesClosePoints[seriesIndex],
+			},
+		}
 
-			if seriesMarks := series.MarkLine.Lines.filterGlobal(false); len(seriesMarks) > 0 {
-				// Use close prices for mark line calculations
-				closeValues := ExtractClosePrices(*series)
-				seriesColor := opt.Theme.GetSeriesColor(seriesIndex)
+		for _, component := range ohlcComponents {
+			var values []float64
+
+			// Handle mark lines
+			if seriesMarks := component.markLine.Lines.filterGlobal(false); len(seriesMarks) > 0 {
+				if values == nil {
+					values = component.extractFunc(series)
+				}
+				markLineValueFormatter := getPreferredValueFormatter(component.markLine.ValueFormatter,
+					series.Label.ValueFormatter, opt.ValueFormatter)
 				markLinePainter.add(markLineRenderOption{
 					fillColor:      seriesColor,
 					fontColor:      opt.Theme.GetMarkTextColor(),
 					strokeColor:    seriesColor,
 					font:           getPreferredFont(series.Label.FontStyle.Font),
 					marklines:      seriesMarks,
-					seriesValues:   closeValues,
+					seriesValues:   values,
 					axisRange:      yRange,
 					valueFormatter: markLineValueFormatter,
 				})
 			}
-		}
-	}
 
-	// Handle mark points for each series
-	for seriesIndex := 0; seriesIndex < seriesList.len(); seriesIndex++ {
-		series := seriesList.getSeries(seriesIndex).(*CandlestickSeries)
-		if len(series.MarkPoint.Points) > 0 {
-			markPointValueFormatter := getPreferredValueFormatter(series.MarkPoint.ValueFormatter,
-				series.Label.ValueFormatter, opt.ValueFormatter)
-
-			if seriesMarks := series.MarkPoint.Points.filterGlobal(false); len(seriesMarks) > 0 {
-				// Use close prices for mark point calculations
-				closeValues := ExtractClosePrices(*series)
-				seriesColor := opt.Theme.GetSeriesColor(seriesIndex)
+			// Handle mark points
+			if seriesMarks := component.markPoint.Points.filterGlobal(false); len(seriesMarks) > 0 {
+				if values == nil {
+					values = component.extractFunc(series)
+				}
+				markPointValueFormatter := getPreferredValueFormatter(component.markPoint.ValueFormatter,
+					series.Label.ValueFormatter, opt.ValueFormatter)
 				markPointPainter.add(markPointRenderOption{
 					fillColor:          seriesColor,
 					font:               getPreferredFont(series.Label.FontStyle.Font),
-					symbolSize:         series.MarkPoint.SymbolSize,
-					points:             allSeriesPoints[seriesIndex],
+					symbolSize:         component.markPoint.SymbolSize,
+					points:             component.points,
 					markpoints:         seriesMarks,
-					seriesValues:       closeValues,
+					seriesValues:       values,
 					valueFormatter:     markPointValueFormatter,
 					seriesLabelPainter: allLabelPainters[seriesIndex],
 				})
 			}
-		}
-	}
 
-	// Handle trend lines for each series
-	for seriesIndex := 0; seriesIndex < seriesList.len(); seriesIndex++ {
-		series := seriesList.getSeries(seriesIndex).(*CandlestickSeries)
-
-		// Bounds check for Y axis index to prevent panic
-		if series.YAxisIndex >= len(result.yaxisRanges) {
-			continue // Skip this series if YAxisIndex is out of bounds
-		}
-		yRange := result.yaxisRanges[series.YAxisIndex]
-
-		if len(series.TrendLine) > 0 {
-			// Use close prices for trend line calculations
-			closeValues := ExtractClosePrices(*series)
-			trendLinePainter.add(trendLineRenderOption{
-				defaultStrokeColor: opt.Theme.GetSeriesTrendColor(seriesIndex),
-				xValues:            xValues,
-				seriesValues:       closeValues,
-				axisRange:          yRange,
-				trends:             series.TrendLine,
-				dashed:             false, // Default for candlestick charts
-			})
+			// Handle trend lines
+			if len(component.trendLines) > 0 {
+				if values == nil {
+					values = component.extractFunc(series)
+				}
+				trendLinePainter.add(trendLineRenderOption{
+					defaultStrokeColor: opt.Theme.GetSeriesTrendColor(seriesIndex),
+					xValues:            xValues,
+					seriesValues:       values,
+					axisRange:          yRange,
+					trends:             component.trendLines,
+					dashed:             false, // Default for candlestick charts
+				})
+			}
 		}
 	}
 

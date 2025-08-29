@@ -67,7 +67,7 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 				Label: charts.SeriesLabel{
 					Show: charts.Ptr(true),
 				},
-				MarkLine: charts.SeriesMarkLine{
+				CloseMarkLine: charts.SeriesMarkLine{
 					Lines: []charts.SeriesMark{
 						{Type: charts.SeriesMarkTypeAverage}, // Resistance level
 						{Type: charts.SeriesMarkTypeMin},     // Support level

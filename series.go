@@ -214,6 +214,8 @@ type GenericSeries struct {
 	// Type is the series chart type. Default is "line".
 	Type string
 	// Values provides the series data values.
+	// For ChartTypeCandlestick, the Values field must contain OHLC data encoded as groups of 4 consecutive
+	// float64 values: [Open, High, Low, Close, ...]. For N candlesticks, Values must have exactly N*4 elements.
 	Values []float64
 	// YAxisIndex is the y-axis to apply the series to: must be 0 or 1.
 	YAxisIndex int
@@ -267,6 +269,13 @@ func (g GenericSeriesList) getSeriesValues(index int) []float64 {
 }
 
 func (g GenericSeriesList) getSeriesLen(index int) int {
+	if g[index].Type == ChartTypeCandlestick {
+		if l := len(g[index].Values); l%4 == 0 {
+			return l / 4
+		} else {
+			return l // invalid OHLC format, each value will get its own candle
+		}
+	}
 	return len(g[index].Values)
 }
 
@@ -1363,18 +1372,26 @@ func filterSeriesList[T any](sl seriesList, chartType string) T {
 					result = append(result, *v)
 				case *GenericSeries:
 					// Convert GenericSeries to CandlestickSeries
-					// This should rarely happen as GenericSeries doesn't naturally contain OHLC data
-					// Create basic OHLC where O=H=L=C (flat line) from single values
-					ohlcData := make([]OHLCData, len(v.Values))
-					for j, val := range v.Values {
-						if val == GetNullValue() {
+					// If Values length is divisible by 4, assume it contains OHLC data
+					// Otherwise, create basic OHLC where O=H=L=C (flat line) from single values
+					var ohlcData []OHLCData
+					if len(v.Values)%4 == 0 && len(v.Values) > 0 {
+						// Assume OHLC encoding: groups of 4 consecutive values
+						candleCount := len(v.Values) / 4
+						ohlcData = make([]OHLCData, candleCount)
+						for j := 0; j < candleCount; j++ {
+							baseIdx := j * 4
 							ohlcData[j] = OHLCData{
-								Open:  GetNullValue(),
-								High:  GetNullValue(),
-								Low:   GetNullValue(),
-								Close: GetNullValue(),
+								Open:  v.Values[baseIdx],
+								High:  v.Values[baseIdx+1],
+								Low:   v.Values[baseIdx+2],
+								Close: v.Values[baseIdx+3],
 							}
-						} else {
+						}
+					} else {
+						// Fallback: create basic OHLC where O=H=L=C (flat line) from single values
+						ohlcData = make([]OHLCData, len(v.Values))
+						for j, val := range v.Values {
 							ohlcData[j] = OHLCData{
 								Open:  val,
 								High:  val,
@@ -1384,12 +1401,12 @@ func filterSeriesList[T any](sl seriesList, chartType string) T {
 						}
 					}
 					result = append(result, CandlestickSeries{
-						Data:       ohlcData,
-						YAxisIndex: v.YAxisIndex,
-						Label:      v.Label,
-						Name:       v.Name,
-						MarkLine:   v.MarkLine,
-						MarkPoint:  v.MarkPoint,
+						Data:           ohlcData,
+						YAxisIndex:     v.YAxisIndex,
+						Label:          v.Label,
+						Name:           v.Name,
+						CloseMarkLine:  v.MarkLine,
+						CloseMarkPoint: v.MarkPoint,
 					})
 				}
 			}
@@ -1460,23 +1477,25 @@ func filterSeriesList[T any](sl seriesList, chartType string) T {
 						Name:   v.Name,
 					})
 				case *CandlestickSeries:
-					// Use close prices for generic representation
-					closeValues := make([]float64, len(v.Data))
-					for j, ohlc := range v.Data {
+					// Encode OHLC data as four in-order float64 values per candlestick
+					values := make([]float64, 0, len(v.Data)*4)
+					for _, ohlc := range v.Data {
 						if validateOHLCData(ohlc) {
-							closeValues[j] = ohlc.Close
-						} else {
-							closeValues[j] = GetNullValue()
+							values = append(values, ohlc.Open, ohlc.High, ohlc.Low, ohlc.Close)
+						} else if validateOHLCHighLow(ohlc) {
+							values = append(values, GetNullValue(), ohlc.High, ohlc.Low, GetNullValue())
+						} else { // For invalid OHLC data, use null values to maintain structure
+							values = append(values, GetNullValue(), GetNullValue(), GetNullValue(), GetNullValue())
 						}
 					}
 					result = append(result, GenericSeries{
-						Values:     closeValues,
+						Values:     values,
 						YAxisIndex: v.YAxisIndex,
 						Label:      v.Label,
 						Name:       v.Name,
 						Type:       ChartTypeCandlestick,
-						MarkLine:   v.MarkLine,
-						MarkPoint:  v.MarkPoint,
+						MarkLine:   v.CloseMarkLine,
+						MarkPoint:  v.CloseMarkPoint,
 					})
 				case *GenericSeries:
 					result = append(result, *v)
@@ -2010,10 +2029,15 @@ func getSeriesMaxDataCount(sl seriesList) int {
 }
 
 // OHLCData represents Open, High, Low, Close financial data for a single time period.
+// All values must satisfy: High >= Open, Close and Low <= Open, Close for valid candlesticks.
 type OHLCData struct {
-	Open  float64
-	High  float64
-	Low   float64
+	// Open is the opening price for the time period.
+	Open float64
+	// High is the highest price during the time period.
+	High float64
+	// Low is the lowest price during the time period.
+	Low float64
+	// Close is the closing price for the time period.
 	Close float64
 }
 
@@ -2025,7 +2049,7 @@ const (
 
 // CandlestickSeries references OHLC data for candlestick charts.
 type CandlestickSeries struct {
-	// Data provides OHLC data for each time period
+	// Data provides OHLC data for each time period.
 	Data []OHLCData
 	// YAxisIndex is the index for the axis, it must be 0 or 1.
 	YAxisIndex int
@@ -2033,18 +2057,37 @@ type CandlestickSeries struct {
 	Label SeriesLabel
 	// Name specifies a name for the series.
 	Name string
-	// MarkPoint provides a configuration for mark points for this series.
-	MarkPoint SeriesMarkPoint
-	// MarkLine provides a configuration for mark lines for this series.
-	MarkLine SeriesMarkLine
-	// TrendLine provides configurations for trend lines for this series.
-	TrendLine []SeriesTrendLine
-	// TODO - fields below in generic series?
-	// ShowWicks when false hides the high-low wicks (showing only the body)
+
+	// OpenMarkPoint provides mark points for open values.
+	OpenMarkPoint SeriesMarkPoint
+	// OpenMarkLine provides mark lines for open values.
+	OpenMarkLine SeriesMarkLine
+	// OpenTrendLine provides trend lines for open values.
+	OpenTrendLine []SeriesTrendLine
+	// HighMarkPoint provides mark points for high values.
+	HighMarkPoint SeriesMarkPoint
+	// HighMarkLine provides mark lines for high values.
+	HighMarkLine SeriesMarkLine
+	// HighTrendLine provides trend lines for high values.
+	HighTrendLine []SeriesTrendLine
+	// LowMarkPoint provides mark points for low values.
+	LowMarkPoint SeriesMarkPoint
+	// LowMarkLine provides mark lines for low values.
+	LowMarkLine SeriesMarkLine
+	// LowTrendLine provides trend lines for low values.
+	LowTrendLine []SeriesTrendLine
+	// CloseMarkPoint provides mark points for close values.
+	CloseMarkPoint SeriesMarkPoint
+	// CloseMarkLine provides mark lines for close values.
+	CloseMarkLine SeriesMarkLine
+	// CloseTrendLine provides trend lines for close values.
+	CloseTrendLine []SeriesTrendLine
+
+	// ShowWicks when false hides the high-low wicks (showing only the body).
 	ShowWicks *bool
-	// CandleStyle specifies the visual style: "filled", "traditional", "outline"
+	// CandleStyle specifies the visual style: "filled", "traditional", "outline".
 	CandleStyle string
-	// PatternConfig configures automatic pattern detection and labeling
+	// PatternConfig configures automatic pattern detection and labeling.
 	PatternConfig *CandlestickPatternConfig
 }
 
@@ -2052,11 +2095,15 @@ func (k *CandlestickSeries) getYAxisIndex() int {
 	return k.YAxisIndex
 }
 
+// getValues returns only High and Low values for range calculations.
+// Candlesticks cannot be meaningfully summed or aggregated, but the full price range
+// (High/Low) is needed for axis scaling.
 func (k *CandlestickSeries) getValues() []float64 {
-	// Flatten OHLC data
-	result := make([]float64, 0, len(k.Data)*4)
+	// candlestick can't be summed or flattened, so values are only used for range
+	// for that reason we only add the high and low values here
+	result := make([]float64, 0, len(k.Data)*2)
 	for _, ohlc := range k.Data {
-		result = append(result, ohlc.Open, ohlc.High, ohlc.Low, ohlc.Close)
+		result = append(result, ohlc.High, ohlc.Low)
 	}
 	return result
 }
@@ -2069,13 +2116,14 @@ func (k *CandlestickSeries) Summary() populationSummary {
 	return summarizePopulationData(k.getValues())
 }
 
-// TODO: validateOHLCData is called frequently during rendering and pattern detection.
+// TODO - validateOHLCData is called frequently during rendering and pattern detection.
 // Consider memoization or caching validation results for performance optimization.
-// validateOHLCData ensures OHLC data follows financial market rules
+// validateOHLCData ensures OHLC data follows financial market rules.
 func validateOHLCData(ohlc OHLCData) bool {
 	return validateOHLCOpen(ohlc) && validateOHLCClose(ohlc)
 }
 
+// validateOHLCHighLow validates that High >= Low and neither is null.
 func validateOHLCHighLow(ohlc OHLCData) bool {
 	if ohlc.High == GetNullValue() || ohlc.Low == GetNullValue() {
 		return false
@@ -2083,6 +2131,7 @@ func validateOHLCHighLow(ohlc OHLCData) bool {
 	return ohlc.High >= ohlc.Low
 }
 
+// validateOHLCOpen validates that Open is within the High-Low range.
 func validateOHLCOpen(ohlc OHLCData) bool {
 	if ohlc.Open == GetNullValue() || !validateOHLCHighLow(ohlc) {
 		return false
@@ -2090,6 +2139,7 @@ func validateOHLCOpen(ohlc OHLCData) bool {
 	return ohlc.High >= ohlc.Open && ohlc.Low <= ohlc.Open
 }
 
+// validateOHLCClose validates that Close is within the High-Low range.
 func validateOHLCClose(ohlc OHLCData) bool {
 	if ohlc.Close == GetNullValue() || !validateOHLCHighLow(ohlc) {
 		return false
@@ -2107,7 +2157,8 @@ func (k CandlestickSeriesList) len() int {
 	return len(k)
 }
 
-// SumSeries returns a float64 slice with the sum of each series (using close prices)
+// SumSeries returns a float64 slice with the sum of each series.
+// For candlestick series, this sums the High and Low values (used for range calculations).
 func (k CandlestickSeriesList) SumSeries() []float64 {
 	return sumSeries(k)
 }
@@ -2134,7 +2185,7 @@ func (k CandlestickSeriesList) getSeriesSymbol(_ int) Symbol {
 
 func (k CandlestickSeriesList) hasMarkPoint() bool {
 	for _, s := range k {
-		if len(s.MarkPoint.Points) > 0 {
+		if len(s.OpenMarkPoint.Points) > 0 || len(s.HighMarkPoint.Points) > 0 || len(s.LowMarkPoint.Points) > 0 || len(s.CloseMarkPoint.Points) > 0 {
 			return true
 		}
 	}
@@ -2158,31 +2209,55 @@ func (k CandlestickSeriesList) SetSeriesLabels(label SeriesLabel) {
 	}
 }
 
+// ToGenericSeriesList converts candlestick series to generic series format.
+// Each candlestick is encoded as 4 consecutive float64 values: [Open, High, Low, Close].
+// Invalid OHLC data is encoded with null values to maintain the 4-element structure.
 func (k CandlestickSeriesList) ToGenericSeriesList() GenericSeriesList {
 	result := make([]GenericSeries, len(k))
 	for i, s := range k {
-		// TODO - need to use full reconstruction for generic representation (not just close prices)
+		// Encode OHLC data as four in-order float64 values per candlestick
+		values := make([]float64, 0, len(s.Data)*4)
+		for _, ohlc := range s.Data {
+			if validateOHLCData(ohlc) {
+				values = append(values, ohlc.Open, ohlc.High, ohlc.Low, ohlc.Close)
+			} else if validateOHLCHighLow(ohlc) {
+				values = append(values, GetNullValue(), ohlc.High, ohlc.Low, GetNullValue())
+			} else { // For invalid OHLC data, use null values to maintain structure
+				values = append(values, GetNullValue(), GetNullValue(), GetNullValue(), GetNullValue())
+			}
+		}
 		result[i] = GenericSeries{
-			Values:     ExtractClosePrices(s),
+			Values:     values,
 			YAxisIndex: s.YAxisIndex,
 			Label:      s.Label,
 			Name:       s.Name,
 			Type:       ChartTypeCandlestick,
-			MarkLine:   s.MarkLine,
-			MarkPoint:  s.MarkPoint,
+			// For generic representation, use close values as primary
+			MarkLine:  s.CloseMarkLine,
+			MarkPoint: s.CloseMarkPoint,
 		}
 	}
 	return result
 }
 
-// CandlestickSeriesOption provides series customization
+// CandlestickSeriesOption provides series customization for NewSeriesListCandlestick.
 type CandlestickSeriesOption struct {
-	Label         SeriesLabel
-	Names         []string
-	MarkPoint     SeriesMarkPoint
-	MarkLine      SeriesMarkLine
-	CandleStyle   string
-	PatternConfig *CandlestickPatternConfig
+	Label          SeriesLabel
+	Names          []string
+	OpenMarkPoint  SeriesMarkPoint
+	OpenMarkLine   SeriesMarkLine
+	OpenTrendLine  []SeriesTrendLine
+	HighMarkPoint  SeriesMarkPoint
+	HighMarkLine   SeriesMarkLine
+	HighTrendLine  []SeriesTrendLine
+	LowMarkPoint   SeriesMarkPoint
+	LowMarkLine    SeriesMarkLine
+	LowTrendLine   []SeriesTrendLine
+	CloseMarkPoint SeriesMarkPoint
+	CloseMarkLine  SeriesMarkLine
+	CloseTrendLine []SeriesTrendLine
+	CandleStyle    string
+	PatternConfig  *CandlestickPatternConfig
 }
 
 // NewSeriesListCandlestick builds a SeriesList for candlestick charts from OHLC data.
@@ -2195,12 +2270,22 @@ func NewSeriesListCandlestick(data [][]OHLCData, opts ...CandlestickSeriesOption
 	seriesList := make([]CandlestickSeries, len(data))
 	for index, ohlcData := range data {
 		s := CandlestickSeries{
-			Data:          ohlcData,
-			Label:         opt.Label,
-			MarkPoint:     opt.MarkPoint,
-			MarkLine:      opt.MarkLine,
-			CandleStyle:   opt.CandleStyle,
-			PatternConfig: opt.PatternConfig,
+			Data:           ohlcData,
+			Label:          opt.Label,
+			OpenMarkPoint:  opt.OpenMarkPoint,
+			OpenMarkLine:   opt.OpenMarkLine,
+			OpenTrendLine:  opt.OpenTrendLine,
+			HighMarkPoint:  opt.HighMarkPoint,
+			HighMarkLine:   opt.HighMarkLine,
+			HighTrendLine:  opt.HighTrendLine,
+			LowMarkPoint:   opt.LowMarkPoint,
+			LowMarkLine:    opt.LowMarkLine,
+			LowTrendLine:   opt.LowTrendLine,
+			CloseMarkPoint: opt.CloseMarkPoint,
+			CloseMarkLine:  opt.CloseMarkLine,
+			CloseTrendLine: opt.CloseTrendLine,
+			CandleStyle:    opt.CandleStyle,
+			PatternConfig:  opt.PatternConfig,
 		}
 		if index < len(opt.Names) {
 			s.Name = opt.Names[index]
@@ -2210,12 +2295,51 @@ func NewSeriesListCandlestick(data [][]OHLCData, opts ...CandlestickSeriesOption
 	return seriesList
 }
 
-// ExtractClosePrices extracts close prices from OHLC data for use with indicators
-func ExtractClosePrices(series CandlestickSeries) []float64 {
-	result := make([]float64, len(series.Data))
-	for i, ohlc := range series.Data {
+// ExtractOpenPrices extracts open prices from OHLC data.
+func (k *CandlestickSeries) ExtractOpenPrices() []float64 {
+	result := make([]float64, len(k.Data))
+	for i, ohlc := range k.Data {
+		if validateOHLCOpen(ohlc) {
+			result[i] = ohlc.Open
+		} else {
+			result[i] = GetNullValue()
+		}
+	}
+	return result
+}
+
+// ExtractClosePrices extracts close prices from OHLC data for use with indicators.
+func (k *CandlestickSeries) ExtractClosePrices() []float64 {
+	result := make([]float64, len(k.Data))
+	for i, ohlc := range k.Data {
 		if validateOHLCClose(ohlc) {
 			result[i] = ohlc.Close
+		} else {
+			result[i] = GetNullValue()
+		}
+	}
+	return result
+}
+
+// ExtractHighPrices extracts high prices from OHLC data.
+func (k *CandlestickSeries) ExtractHighPrices() []float64 {
+	result := make([]float64, len(k.Data))
+	for i, ohlc := range k.Data {
+		if validateOHLCHighLow(ohlc) {
+			result[i] = ohlc.High
+		} else {
+			result[i] = GetNullValue()
+		}
+	}
+	return result
+}
+
+// ExtractLowPrices extracts low prices from OHLC data.
+func (k *CandlestickSeries) ExtractLowPrices() []float64 {
+	result := make([]float64, len(k.Data))
+	for i, ohlc := range k.Data {
+		if validateOHLCHighLow(ohlc) {
+			result[i] = ohlc.Low
 		} else {
 			result[i] = GetNullValue()
 		}
@@ -2261,12 +2385,12 @@ func AggregateCandlestick(data CandlestickSeries, factor int) CandlestickSeries 
 	}
 
 	return CandlestickSeries{
-		Data:        aggregated,
-		YAxisIndex:  data.YAxisIndex,
-		Label:       data.Label,
-		Name:        data.Name + " (Aggregated)",
-		MarkPoint:   data.MarkPoint,
-		MarkLine:    data.MarkLine,
-		CandleStyle: data.CandleStyle,
+		Data:           aggregated,
+		YAxisIndex:     data.YAxisIndex,
+		Label:          data.Label,
+		Name:           data.Name + " (Aggregated)",
+		CloseMarkPoint: data.CloseMarkPoint,
+		CloseMarkLine:  data.CloseMarkLine,
+		CandleStyle:    data.CandleStyle,
 	}
 }
