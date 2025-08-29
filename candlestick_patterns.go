@@ -14,14 +14,15 @@ const (
 	PatternShootingStar   = "shooting_star"
 	PatternGravestone     = "gravestone_doji"
 	PatternDragonfly      = "dragonfly_doji"
-	PatternMarubozuBull   = "marubozu_bullish"
-	PatternMarubozuBear   = "marubozu_bearish"
+	PatternMarubozuBull   = "marubozu_bull"
+	PatternMarubozuBear   = "marubozu_bear"
 	PatternSpinningTop    = "spinning_top"
 
 	// Two candle patterns
-	PatternEngulfingBull  = "engulfing_bullish"
-	PatternEngulfingBear  = "engulfing_bearish"
-	PatternHarami         = "harami"
+	PatternEngulfingBull  = "engulfing_bull"
+	PatternEngulfingBear  = "engulfing_bear"
+	PatternHaramiBull     = "harami_bear"
+	PatternHaramiBear     = "harami_bull"
 	PatternPiercingLine   = "piercing_line"
 	PatternDarkCloudCover = "dark_cloud_cover"
 	PatternTweezerTop     = "tweezer_top"
@@ -673,226 +674,203 @@ func scanSeriesForPatterns(series *CandlestickSeries, config *CandlestickPattern
 		return nil
 	}
 
+	// Create enabled pattern lookup for O(1) access
+	enabledLookup := make(map[string]bool, len(config.EnabledPatterns))
+	for _, pattern := range config.EnabledPatterns {
+		enabledLookup[pattern] = true
+	}
+
 	patternMap := make(map[int][]PatternDetectionResult)
 	options := config.DetectionOptions
-	for index, ohlc := range series.Data {
-		if !validateOHLCData(ohlc) {
-			continue
-		}
+	data := series.Data
 
-		var patterns []PatternDetectionResult
-
-		// Single candle patterns
-		if isPatternEnabled(PatternDoji, config.EnabledPatterns) && DetectDoji(ohlc, options.DojiThreshold) {
-			patterns = append(patterns, PatternDetectionResult{
-				Index:       index,
-				PatternName: "Doji",
-				PatternType: PatternDoji,
-			})
-		}
-
-		if isPatternEnabled(PatternHammer, config.EnabledPatterns) && DetectHammer(ohlc, options.ShadowRatio) {
-			patterns = append(patterns, PatternDetectionResult{
-				Index:       index,
-				PatternName: "Hammer",
-				PatternType: PatternHammer,
-			})
-		}
-
-		if isPatternEnabled(PatternInvertedHammer, config.EnabledPatterns) && DetectInvertedHammer(ohlc, options.ShadowRatio) {
-			patterns = append(patterns, PatternDetectionResult{
-				Index:       index,
-				PatternName: "Inverted Hammer",
-				PatternType: PatternInvertedHammer,
-			})
-		}
-
-		if isPatternEnabled(PatternShootingStar, config.EnabledPatterns) && DetectShootingStar(ohlc, options.ShadowRatio) {
-			patterns = append(patterns, PatternDetectionResult{
-				Index:       index,
-				PatternName: "Shooting Star",
-				PatternType: PatternShootingStar,
-			})
-		}
-
-		if isPatternEnabled(PatternGravestone, config.EnabledPatterns) && DetectGravestoneDoji(ohlc, options) {
-			patterns = append(patterns, PatternDetectionResult{
-				Index:       index,
-				PatternName: "Gravestone Doji",
-				PatternType: PatternGravestone,
-			})
-		}
-
-		if isPatternEnabled(PatternDragonfly, config.EnabledPatterns) && DetectDragonflyDoji(ohlc, options) {
-			patterns = append(patterns, PatternDetectionResult{
-				Index:       index,
-				PatternName: "Dragonfly Doji",
-				PatternType: PatternDragonfly,
-			})
-		}
-
-		// Marubozu patterns
-		if isPatternEnabled(PatternMarubozuBull, config.EnabledPatterns) || isPatternEnabled(PatternMarubozuBear, config.EnabledPatterns) {
-			bullishMarubozu, bearishMarubozu := DetectMarubozu(ohlc, 0.01)
-			if isPatternEnabled(PatternMarubozuBull, config.EnabledPatterns) && bullishMarubozu {
-				patterns = append(patterns, PatternDetectionResult{
-					Index:       index,
-					PatternName: "Bullish Marubozu",
-					PatternType: PatternMarubozuBull,
-				})
+	// Process patterns by type to minimize redundant checks
+	for _, detectors := range patternDetectors {
+		for _, detector := range detectors {
+			if !enabledLookup[detector.patternType] {
+				continue
 			}
-			if isPatternEnabled(PatternMarubozuBear, config.EnabledPatterns) && bearishMarubozu {
-				patterns = append(patterns, PatternDetectionResult{
-					Index:       index,
-					PatternName: "Bearish Marubozu",
-					PatternType: PatternMarubozuBear,
-				})
-			}
-		}
 
-		if isPatternEnabled(PatternSpinningTop, config.EnabledPatterns) && DetectSpinningTop(ohlc, 0.3) {
-			patterns = append(patterns, PatternDetectionResult{
-				Index:       index,
-				PatternName: "Spinning Top",
-				PatternType: PatternSpinningTop,
-			})
-		}
-
-		// Two candle patterns (if index > 0)
-		if index > 0 && validateOHLCData(series.Data[index-1]) {
-			prev := series.Data[index-1]
-
-			// Engulfing patterns
-			if isPatternEnabled(PatternEngulfingBull, config.EnabledPatterns) || isPatternEnabled(PatternEngulfingBear, config.EnabledPatterns) {
-				bullEngulfing, bearEngulfing := DetectEngulfing(prev, ohlc, options.EngulfingMinSize)
-				if isPatternEnabled(PatternEngulfingBull, config.EnabledPatterns) && bullEngulfing {
-					patterns = append(patterns, PatternDetectionResult{
-						Index:       index,
-						PatternName: "Bullish Engulfing",
-						PatternType: PatternEngulfingBull,
-					})
-				}
-				if isPatternEnabled(PatternEngulfingBear, config.EnabledPatterns) && bearEngulfing {
-					patterns = append(patterns, PatternDetectionResult{
-						Index:       index,
-						PatternName: "Bearish Engulfing",
-						PatternType: PatternEngulfingBear,
+			// Scan series for this specific pattern
+			for i := detector.minCandles - 1; i < len(data); i++ {
+				if detector.detectFunc(data, i, options) {
+					patternMap[i] = append(patternMap[i], PatternDetectionResult{
+						Index:       i,
+						PatternName: detector.patternName,
+						PatternType: detector.patternType,
 					})
 				}
 			}
-
-			// Harami patterns
-			if isPatternEnabled(PatternHarami, config.EnabledPatterns) {
-				bullishHarami, bearishHarami := DetectHarami(prev, ohlc, 0.3)
-				if bullishHarami {
-					patterns = append(patterns, PatternDetectionResult{
-						Index:       index,
-						PatternName: "Bullish Harami",
-						PatternType: PatternHarami,
-					})
-				}
-				if bearishHarami {
-					patterns = append(patterns, PatternDetectionResult{
-						Index:       index,
-						PatternName: "Bearish Harami",
-						PatternType: PatternHarami,
-					})
-				}
-			}
-
-			if isPatternEnabled(PatternPiercingLine, config.EnabledPatterns) && DetectPiercingLine(prev, ohlc) {
-				patterns = append(patterns, PatternDetectionResult{
-					Index:       index,
-					PatternName: "Piercing Line",
-					PatternType: PatternPiercingLine,
-				})
-			}
-
-			if isPatternEnabled(PatternDarkCloudCover, config.EnabledPatterns) && DetectDarkCloudCover(prev, ohlc) {
-				patterns = append(patterns, PatternDetectionResult{
-					Index:       index,
-					PatternName: "Dark Cloud Cover",
-					PatternType: PatternDarkCloudCover,
-				})
-			}
-
-			if isPatternEnabled(PatternTweezerTop, config.EnabledPatterns) && DetectTweezerTops(prev, ohlc, 0.005) {
-				patterns = append(patterns, PatternDetectionResult{
-					Index:       index,
-					PatternName: "Tweezer Top",
-					PatternType: PatternTweezerTop,
-				})
-			}
-
-			if isPatternEnabled(PatternTweezerBottom, config.EnabledPatterns) && DetectTweezerBottoms(prev, ohlc, 0.005) {
-				patterns = append(patterns, PatternDetectionResult{
-					Index:       index,
-					PatternName: "Tweezer Bottom",
-					PatternType: PatternTweezerBottom,
-				})
-			}
-		}
-
-		// Three candle patterns (if index > 1)
-		if index > 1 && validateOHLCData(series.Data[index-1]) && validateOHLCData(series.Data[index-2]) {
-			prev := series.Data[index-1]
-			prevPrev := series.Data[index-2]
-
-			if isPatternEnabled(PatternMorningStar, config.EnabledPatterns) && DetectMorningStar(prevPrev, prev, ohlc, options) {
-				patterns = append(patterns, PatternDetectionResult{
-					Index:       index,
-					PatternName: "Morning Star",
-					PatternType: PatternMorningStar,
-				})
-			}
-
-			if isPatternEnabled(PatternEveningStar, config.EnabledPatterns) && DetectEveningStar(prevPrev, prev, ohlc, options) {
-				patterns = append(patterns, PatternDetectionResult{
-					Index:       index,
-					PatternName: "Evening Star",
-					PatternType: PatternEveningStar,
-				})
-			}
-
-			if isPatternEnabled(PatternThreeWhiteSoldiers, config.EnabledPatterns) && DetectThreeWhiteSoldiers(prevPrev, prev, ohlc) {
-				patterns = append(patterns, PatternDetectionResult{
-					Index:       index,
-					PatternName: "Three White Soldiers",
-					PatternType: PatternThreeWhiteSoldiers,
-				})
-			}
-
-			if isPatternEnabled(PatternThreeBlackCrows, config.EnabledPatterns) && DetectThreeBlackCrows(prevPrev, prev, ohlc) {
-				patterns = append(patterns, PatternDetectionResult{
-					Index:       index,
-					PatternName: "Three Black Crows",
-					PatternType: PatternThreeBlackCrows,
-				})
-			}
-		}
-
-		// Store patterns if any were found
-		if len(patterns) > 0 {
-			patternMap[index] = patterns
 		}
 	}
 
 	return patternMap
 }
 
-// isPatternEnabled checks if a pattern is in the enabled list (private)
-func isPatternEnabled(patternType string, enabledPatterns []string) bool {
-	// Must have explicit patterns listed
-	if len(enabledPatterns) == 0 {
+// Pattern detection wrapper functions for unified interface
+func detectDojiAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	return DetectDoji(data[index], options.DojiThreshold)
+}
+
+func detectHammerAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	return DetectHammer(data[index], options.ShadowRatio)
+}
+
+func detectInvertedHammerAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	return DetectInvertedHammer(data[index], options.ShadowRatio)
+}
+
+func detectShootingStarAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	return DetectShootingStar(data[index], options.ShadowRatio)
+}
+
+func detectGravestoneDojiAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	return DetectGravestoneDoji(data[index], options)
+}
+
+func detectDragonflyDojiAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	return DetectDragonflyDoji(data[index], options)
+}
+
+func detectBullishMarubozuAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	bullish, _ := DetectMarubozu(data[index], 0.01)
+	return bullish
+}
+
+func detectBearishMarubozuAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	_, bearish := DetectMarubozu(data[index], 0.01)
+	return bearish
+}
+
+func detectSpinningTopAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	return DetectSpinningTop(data[index], 0.3)
+}
+
+func detectBullishEngulfingAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	if index < 1 {
 		return false
 	}
-	// Check if pattern is in the enabled list
-	for _, p := range enabledPatterns {
-		if p == patternType {
-			return true
-		}
+	bullish, _ := DetectEngulfing(data[index-1], data[index], options.EngulfingMinSize)
+	return bullish
+}
+
+func detectBearishEngulfingAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	if index < 1 {
+		return false
 	}
-	return false
+	_, bearish := DetectEngulfing(data[index-1], data[index], options.EngulfingMinSize)
+	return bearish
+}
+
+func detectBullishHaramiAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	if index < 1 {
+		return false
+	}
+	bullish, _ := DetectHarami(data[index-1], data[index], 0.3)
+	return bullish
+}
+
+func detectBearishHaramiAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	if index < 1 {
+		return false
+	}
+	_, bearish := DetectHarami(data[index-1], data[index], 0.3)
+	return bearish
+}
+
+func detectPiercingLineAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	if index < 1 {
+		return false
+	}
+	return DetectPiercingLine(data[index-1], data[index])
+}
+
+func detectDarkCloudCoverAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	if index < 1 {
+		return false
+	}
+	return DetectDarkCloudCover(data[index-1], data[index])
+}
+
+func detectTweezerTopAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	if index < 1 {
+		return false
+	}
+	return DetectTweezerTops(data[index-1], data[index], 0.005)
+}
+
+func detectTweezerBottomAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	if index < 1 {
+		return false
+	}
+	return DetectTweezerBottoms(data[index-1], data[index], 0.005)
+}
+
+func detectMorningStarAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	if index < 2 {
+		return false
+	}
+	return DetectMorningStar(data[index-2], data[index-1], data[index], options)
+}
+
+func detectEveningStarAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	if index < 2 {
+		return false
+	}
+	return DetectEveningStar(data[index-2], data[index-1], data[index], options)
+}
+
+func detectThreeWhiteSoldiersAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	if index < 2 {
+		return false
+	}
+	return DetectThreeWhiteSoldiers(data[index-2], data[index-1], data[index])
+}
+
+func detectThreeBlackCrowsAt(data []OHLCData, index int, options PatternDetectionOption) bool {
+	if index < 2 {
+		return false
+	}
+	return DetectThreeBlackCrows(data[index-2], data[index-1], data[index])
+}
+
+// patternDetector defines a single pattern detection function with metadata
+type patternDetector struct {
+	patternType string
+	patternName string
+	detectFunc  func([]OHLCData, int, PatternDetectionOption) bool
+	minCandles  int // minimum number of candles required
+}
+
+// patternDetectors contains all available pattern detectors organized by type
+var patternDetectors = map[string][]patternDetector{
+	"single": {
+		{PatternDoji, "Doji", detectDojiAt, 1},
+		{PatternHammer, "Hammer", detectHammerAt, 1},
+		{PatternInvertedHammer, "Inverted Hammer", detectInvertedHammerAt, 1},
+		{PatternShootingStar, "Shooting Star", detectShootingStarAt, 1},
+		{PatternGravestone, "Gravestone Doji", detectGravestoneDojiAt, 1},
+		{PatternDragonfly, "Dragonfly Doji", detectDragonflyDojiAt, 1},
+		{PatternMarubozuBull, "Bullish Marubozu", detectBullishMarubozuAt, 1},
+		{PatternMarubozuBear, "Bearish Marubozu", detectBearishMarubozuAt, 1},
+		{PatternSpinningTop, "Spinning Top", detectSpinningTopAt, 1},
+	},
+	"double": {
+		{PatternEngulfingBull, "Bullish Engulfing", detectBullishEngulfingAt, 2},
+		{PatternEngulfingBear, "Bearish Engulfing", detectBearishEngulfingAt, 2},
+		{PatternHaramiBull, "Bullish Harami", detectBullishHaramiAt, 2},
+		{PatternHaramiBear, "Bearish Harami", detectBearishHaramiAt, 2},
+		{PatternPiercingLine, "Piercing Line", detectPiercingLineAt, 2},
+		{PatternDarkCloudCover, "Dark Cloud Cover", detectDarkCloudCoverAt, 2},
+		{PatternTweezerTop, "Tweezer Top", detectTweezerTopAt, 2},
+		{PatternTweezerBottom, "Tweezer Bottom", detectTweezerBottomAt, 2},
+	},
+	"triple": {
+		{PatternMorningStar, "Morning Star", detectMorningStarAt, 3},
+		{PatternEveningStar, "Evening Star", detectEveningStarAt, 3},
+		{PatternThreeWhiteSoldiers, "Three White Soldiers", detectThreeWhiteSoldiersAt, 3},
+		{PatternThreeBlackCrows, "Three Black Crows", detectThreeBlackCrowsAt, 3},
+	},
 }
 
 // formatPatternsDefault provides default pattern formatting (private)
@@ -1064,14 +1042,14 @@ func scanCandlestickPatterns(series CandlestickSeries, options ...PatternDetecti
 				patterns = append(patterns, PatternDetectionResult{
 					Index:       i,
 					PatternName: "Bullish Harami",
-					PatternType: PatternHarami,
+					PatternType: PatternHaramiBull,
 				})
 			}
 			if bearishHarami {
 				patterns = append(patterns, PatternDetectionResult{
 					Index:       i,
 					PatternName: "Bearish Harami",
-					PatternType: PatternHarami,
+					PatternType: PatternHaramiBear,
 				})
 			}
 
@@ -1251,11 +1229,14 @@ func PatternsAll() *CandlestickPatternConfig {
 	return &CandlestickPatternConfig{
 		ReplaceSeriesLabel: true,
 		EnabledPatterns: []string{
-			PatternDoji, PatternHammer, PatternInvertedHammer, PatternShootingStar,
-			PatternGravestone, PatternDragonfly, PatternMarubozuBull, PatternMarubozuBear,
-			PatternSpinningTop, PatternEngulfingBull, PatternEngulfingBear, PatternHarami,
-			PatternPiercingLine, PatternDarkCloudCover, PatternTweezerTop, PatternTweezerBottom,
-			PatternMorningStar, PatternEveningStar, PatternThreeWhiteSoldiers, PatternThreeBlackCrows,
+			// Strong reversal patterns (highest priority)
+			PatternEngulfingBull, PatternEngulfingBear, PatternHammer, PatternMorningStar,
+			PatternEveningStar, PatternShootingStar, PatternThreeBlackCrows, PatternThreeWhiteSoldiers,
+			// Moderate patterns
+			PatternDarkCloudCover, PatternDragonfly, PatternGravestone, PatternMarubozuBear,
+			PatternMarubozuBull, PatternPiercingLine, PatternTweezerBottom, PatternTweezerTop,
+			// Neutral/indecision patterns
+			PatternDoji, PatternHaramiBear, PatternHaramiBull, PatternInvertedHammer, PatternSpinningTop,
 		},
 		DetectionOptions: DefaultPatternOptions(),
 	}
@@ -1266,11 +1247,14 @@ func PatternsAllComplement() *CandlestickPatternConfig {
 	return &CandlestickPatternConfig{
 		ReplaceSeriesLabel: false,
 		EnabledPatterns: []string{
-			PatternDoji, PatternHammer, PatternInvertedHammer, PatternShootingStar,
-			PatternGravestone, PatternDragonfly, PatternMarubozuBull, PatternMarubozuBear,
-			PatternSpinningTop, PatternEngulfingBull, PatternEngulfingBear, PatternHarami,
-			PatternPiercingLine, PatternDarkCloudCover, PatternTweezerTop, PatternTweezerBottom,
-			PatternMorningStar, PatternEveningStar, PatternThreeWhiteSoldiers, PatternThreeBlackCrows,
+			// Strong reversal patterns (highest priority)
+			PatternEngulfingBull, PatternEngulfingBear, PatternHammer, PatternMorningStar,
+			PatternEveningStar, PatternShootingStar, PatternThreeBlackCrows, PatternThreeWhiteSoldiers,
+			// Moderate patterns
+			PatternDarkCloudCover, PatternDragonfly, PatternGravestone, PatternMarubozuBear,
+			PatternMarubozuBull, PatternPiercingLine, PatternTweezerBottom, PatternTweezerTop,
+			// Neutral/indecision patterns
+			PatternDoji, PatternHaramiBear, PatternHaramiBull, PatternInvertedHammer, PatternSpinningTop,
 		},
 		DetectionOptions: DefaultPatternOptions(),
 	}
@@ -1281,9 +1265,8 @@ func PatternsImportant() *CandlestickPatternConfig {
 	return &CandlestickPatternConfig{
 		ReplaceSeriesLabel: true,
 		EnabledPatterns: []string{
-			PatternEngulfingBull, PatternEngulfingBear,
-			PatternMorningStar, PatternEveningStar,
-			PatternHammer, PatternShootingStar,
+			PatternEngulfingBull, PatternEngulfingBear, PatternMorningStar,
+			PatternEveningStar, PatternHammer, PatternShootingStar,
 		},
 		DetectionOptions: DefaultPatternOptions(),
 	}
@@ -1294,9 +1277,8 @@ func PatternsImportantComplement() *CandlestickPatternConfig {
 	return &CandlestickPatternConfig{
 		ReplaceSeriesLabel: false,
 		EnabledPatterns: []string{
-			PatternEngulfingBull, PatternEngulfingBear,
-			PatternMorningStar, PatternEveningStar,
-			PatternHammer, PatternShootingStar,
+			PatternEngulfingBull, PatternEngulfingBear, PatternMorningStar,
+			PatternEveningStar, PatternHammer, PatternShootingStar,
 		},
 		DetectionOptions: DefaultPatternOptions(),
 	}
@@ -1307,8 +1289,8 @@ func PatternsBullish() *CandlestickPatternConfig {
 	return &CandlestickPatternConfig{
 		ReplaceSeriesLabel: true,
 		EnabledPatterns: []string{
-			PatternHammer, PatternInvertedHammer, PatternDragonfly,
-			PatternMarubozuBull, PatternEngulfingBull, PatternPiercingLine,
+			PatternHammer, PatternInvertedHammer, PatternDragonfly, PatternMarubozuBull,
+			PatternEngulfingBull, PatternHaramiBull, PatternPiercingLine,
 			PatternTweezerBottom, PatternMorningStar, PatternThreeWhiteSoldiers,
 		},
 		DetectionOptions: DefaultPatternOptions(),
@@ -1320,9 +1302,8 @@ func PatternsBearish() *CandlestickPatternConfig {
 	return &CandlestickPatternConfig{
 		ReplaceSeriesLabel: true,
 		EnabledPatterns: []string{
-			PatternShootingStar, PatternGravestone,
-			PatternMarubozuBear, PatternEngulfingBear, PatternDarkCloudCover,
-			PatternTweezerTop, PatternEveningStar, PatternThreeBlackCrows,
+			PatternShootingStar, PatternGravestone, PatternMarubozuBear, PatternEngulfingBear,
+			PatternHaramiBear, PatternDarkCloudCover, PatternTweezerTop, PatternEveningStar, PatternThreeBlackCrows,
 		},
 		DetectionOptions: DefaultPatternOptions(),
 	}

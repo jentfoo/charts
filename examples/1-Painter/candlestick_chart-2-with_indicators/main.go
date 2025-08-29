@@ -34,7 +34,7 @@ func main() {
 	// Create candlestick series with trend lines
 	candlestickSeries := charts.CandlestickSeries{
 		Data: ohlcData,
-		TrendLine: []charts.SeriesTrendLine{
+		CloseTrendLine: []charts.SeriesTrendLine{
 			{
 				Type:   charts.SeriesTrendTypeSMA,
 				Period: 10,
