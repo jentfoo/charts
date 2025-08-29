@@ -239,8 +239,8 @@ func TestCandlestickChart(t *testing.T) {
 					},
 					PatternConfig: &CandlestickPatternConfig{
 						ReplaceSeriesLabel: true,
-						EnabledPatterns:    []string{PatternDoji},
-						DetectionOptions:   DefaultPatternOptions(),
+						EnabledPatterns:    []string{CandlestickPatternDoji},
+						DojiThreshold:      0.001, ShadowTolerance: 0.01, BodySizeRatio: 0.3, ShadowRatio: 2.0, EngulfingMinSize: 0.8,
 					},
 				}
 				return CandlestickChartOption{

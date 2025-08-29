@@ -231,7 +231,7 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 			var labelToUse SeriesLabel
 			var patternMap map[int][]PatternDetectionResult
 			if series.PatternConfig != nil {
-				patternMap = scanSeriesForPatterns(series, series.PatternConfig)
+				patternMap = scanForCandlestickPatterns(series.Data, *series.PatternConfig)
 			}
 			if len(patternMap) > 0 {
 				labelToUse = series.Label // shallow copy

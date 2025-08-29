@@ -100,11 +100,15 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 			series: charts.CandlestickSeries{
 				Data: ohlcData,
 				Name: "Custom Selection",
-				PatternConfig: charts.EnablePatterns(
-					charts.PatternDoji,
-					charts.PatternHammer,
-					charts.PatternEngulfingBull,
-				),
+				PatternConfig: &charts.CandlestickPatternConfig{
+					ReplaceSeriesLabel: true,
+					EnabledPatterns: []string{
+						charts.CandlestickPatternDoji,
+						charts.CandlestickPatternHammer,
+						charts.CandlestickPatternEngulfingBull,
+					},
+					DojiThreshold: 0.001, ShadowTolerance: 0.01, BodySizeRatio: 0.3, ShadowRatio: 2.0, EngulfingMinSize: 0.8,
+				},
 				Label: charts.SeriesLabel{
 					Show: charts.Ptr(true),
 				},
@@ -117,9 +121,13 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 			width:    800,
 			height:   400,
 			series: charts.CandlestickSeries{
-				Data:          ohlcData,
-				Name:          "Complement Mode",
-				PatternConfig: charts.PatternsImportantComplement(),
+				Data: ohlcData,
+				Name: "Complement Mode",
+				PatternConfig: func() *charts.CandlestickPatternConfig {
+					config := charts.PatternsImportant()
+					config.ReplaceSeriesLabel = false // Complement mode
+					return config
+				}(),
 				Label: charts.SeriesLabel{
 					Show: charts.Ptr(true),
 					LabelFormatter: func(index int, name string, val float64) (string, *charts.LabelStyle) {
@@ -144,7 +152,7 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 				PatternConfig: &charts.CandlestickPatternConfig{
 					ReplaceSeriesLabel: true,
 					EnabledPatterns:    charts.PatternsAll().EnabledPatterns,
-					DetectionOptions:   charts.DefaultPatternOptions(),
+					DojiThreshold: 0.001, ShadowTolerance: 0.01, BodySizeRatio: 0.3, ShadowRatio: 2.0, EngulfingMinSize: 0.8,
 					PatternFormatter: func(patterns []charts.PatternDetectionResult, seriesName string, value float64) (string, *charts.LabelStyle) {
 						if len(patterns) == 0 {
 							return "", nil
