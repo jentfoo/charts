@@ -85,7 +85,7 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 			series: charts.CandlestickSeries{
 				Data:          ohlcData,
 				Name:          "Important Patterns",
-				PatternConfig: charts.PatternsImportant(),
+				PatternConfig: charts.PatternsCore(),
 				Label: charts.SeriesLabel{
 					Show: charts.Ptr(true),
 				},
@@ -101,7 +101,7 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 				Data: ohlcData,
 				Name: "Custom Selection",
 				PatternConfig: &charts.CandlestickPatternConfig{
-					ReplaceSeriesLabel: true,
+					PreferPatternLabels: true,
 					EnabledPatterns: []string{
 						charts.CandlestickPatternDoji,
 						charts.CandlestickPatternHammer,
@@ -124,8 +124,8 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 				Data: ohlcData,
 				Name: "Complement Mode",
 				PatternConfig: func() *charts.CandlestickPatternConfig {
-					config := charts.PatternsImportant()
-					config.ReplaceSeriesLabel = false // Complement mode
+					config := charts.PatternsCore()
+					config.PreferPatternLabels = false // Complement mode
 					return config
 				}(),
 				Label: charts.SeriesLabel{
@@ -150,9 +150,9 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 				Data: ohlcData,
 				Name: "Custom Format",
 				PatternConfig: &charts.CandlestickPatternConfig{
-					ReplaceSeriesLabel: true,
-					EnabledPatterns:    charts.PatternsAll().EnabledPatterns,
-					DojiThreshold: 0.001, ShadowTolerance: 0.01, BodySizeRatio: 0.3, ShadowRatio: 2.0, EngulfingMinSize: 0.8,
+					PreferPatternLabels: true,
+					EnabledPatterns:     charts.PatternsAll().EnabledPatterns,
+					DojiThreshold:       0.001, ShadowTolerance: 0.01, BodySizeRatio: 0.3, ShadowRatio: 2.0, EngulfingMinSize: 0.8,
 					PatternFormatter: func(patterns []charts.PatternDetectionResult, seriesName string, value float64) (string, *charts.LabelStyle) {
 						if len(patterns) == 0 {
 							return "", nil

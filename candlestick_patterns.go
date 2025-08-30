@@ -58,14 +58,14 @@ const (
 	CandlestickPatternEveningStar = "evening_star"
 )
 
-// PatternFormatter allows custom formatting of detected patterns
+// PatternFormatter allows custom formatting of detected patterns.
 type PatternFormatter func(patterns []PatternDetectionResult, seriesName string, value float64) (string, *LabelStyle)
 
 // CandlestickPatternConfig configures automatic pattern detection.
 type CandlestickPatternConfig struct {
-	// ReplaceSeriesLabel controls pattern/user label interaction
-	// true = patterns replace user labels, false = patterns complement user labels
-	ReplaceSeriesLabel bool
+	// PreferPatternLabels controls pattern/user label precedence
+	// true = pattern labels have priority over user labels, false = user labels have priority over pattern labels
+	PreferPatternLabels bool
 
 	// PatternFormatter allows custom formatting, if nil, uses default formatting with theme colors.
 	PatternFormatter PatternFormatter
@@ -162,21 +162,24 @@ func (c *CandlestickPatternConfig) MergePatterns(other *CandlestickPatternConfig
 	}
 
 	return &CandlestickPatternConfig{
-		ReplaceSeriesLabel: c.ReplaceSeriesLabel,
-		EnabledPatterns:    mergedPatterns,
-		PatternFormatter:   c.PatternFormatter,
-		DojiThreshold:      dojiThreshold,
-		ShadowTolerance:    shadowTolerance,
-		BodySizeRatio:      bodySizeRatio,
-		ShadowRatio:        shadowRatio,
-		EngulfingMinSize:   engulfingMinSize,
+		PreferPatternLabels: c.PreferPatternLabels,
+		EnabledPatterns:     mergedPatterns,
+		PatternFormatter:    c.PatternFormatter,
+		DojiThreshold:       dojiThreshold,
+		ShadowTolerance:     shadowTolerance,
+		BodySizeRatio:       bodySizeRatio,
+		ShadowRatio:         shadowRatio,
+		EngulfingMinSize:    engulfingMinSize,
 	}
 }
 
-// PatternDetectionResult holds information about a detected pattern at a specific index
+// PatternDetectionResult holds detected pattern information.
 type PatternDetectionResult struct {
-	Index       int
+	// Index is the pattern's series data point position.
+	Index int
+	// PatternName is the display name (e.g., "Doji", "Hammer").
 	PatternName string
+	// PatternType is the identifier constant (e.g., CandlestickPatternDoji).
 	PatternType string
 }
 
@@ -1099,10 +1102,10 @@ func getPatternDisplayName(patternName string) string {
 // PATTERN CONFIGURATION PRESETS
 // =============================================================================
 
-// PatternsAll enables all standard patterns (replaces user labels)
+// PatternsAll enables all standard patterns.
 func PatternsAll() *CandlestickPatternConfig {
 	return &CandlestickPatternConfig{
-		ReplaceSeriesLabel: true,
+		PreferPatternLabels: true,
 		EnabledPatterns: []string{
 			// Strong reversal patterns (highest priority)
 			CandlestickPatternEngulfingBull, CandlestickPatternEngulfingBear, CandlestickPatternHammer, CandlestickPatternMorningStar,
@@ -1116,10 +1119,10 @@ func PatternsAll() *CandlestickPatternConfig {
 	}
 }
 
-// PatternsImportant enables only the most reliable patterns that work well without volume.
-func PatternsImportant() *CandlestickPatternConfig {
+// PatternsCore enables only the most reliable patterns that work well without volume.
+func PatternsCore() *CandlestickPatternConfig {
 	return &CandlestickPatternConfig{
-		ReplaceSeriesLabel: true,
+		PreferPatternLabels: true,
 		EnabledPatterns: []string{
 			// Most reliable without volume (6-8 patterns)
 			CandlestickPatternEngulfingBull, CandlestickPatternEngulfingBear, // Strong reversal, clear visual
@@ -1133,7 +1136,7 @@ func PatternsImportant() *CandlestickPatternConfig {
 // PatternsBullish enables only bullish patterns.
 func PatternsBullish() *CandlestickPatternConfig {
 	return &CandlestickPatternConfig{
-		ReplaceSeriesLabel: true,
+		PreferPatternLabels: true,
 		EnabledPatterns: []string{
 			CandlestickPatternHammer, CandlestickPatternInvertedHammer, CandlestickPatternDragonfly, CandlestickPatternMarubozuBull,
 			CandlestickPatternEngulfingBull, CandlestickPatternHaramiBull, CandlestickPatternPiercingLine,
@@ -1145,7 +1148,7 @@ func PatternsBullish() *CandlestickPatternConfig {
 // PatternsBearish enables only bearish patterns.
 func PatternsBearish() *CandlestickPatternConfig {
 	return &CandlestickPatternConfig{
-		ReplaceSeriesLabel: true,
+		PreferPatternLabels: true,
 		EnabledPatterns: []string{
 			CandlestickPatternShootingStar, CandlestickPatternGravestone, CandlestickPatternMarubozuBear, CandlestickPatternEngulfingBear,
 			CandlestickPatternHaramiBear, CandlestickPatternDarkCloudCover, CandlestickPatternEveningStar, CandlestickPatternBeltHoldBear,
@@ -1156,7 +1159,7 @@ func PatternsBearish() *CandlestickPatternConfig {
 // PatternsReversal enables patterns that signal potential trend reversals.
 func PatternsReversal() *CandlestickPatternConfig {
 	return &CandlestickPatternConfig{
-		ReplaceSeriesLabel: true,
+		PreferPatternLabels: true,
 		EnabledPatterns: []string{
 			// Single candle reversals
 			CandlestickPatternHammer, CandlestickPatternShootingStar,
@@ -1173,7 +1176,7 @@ func PatternsReversal() *CandlestickPatternConfig {
 // PatternsIndecision enables patterns that signal market indecision or volatility.
 func PatternsIndecision() *CandlestickPatternConfig {
 	return &CandlestickPatternConfig{
-		ReplaceSeriesLabel: true,
+		PreferPatternLabels: true,
 		EnabledPatterns: []string{
 			CandlestickPatternLongLeggedDoji, // Extreme indecision
 			CandlestickPatternHighWave,       // Extreme volatility
@@ -1186,7 +1189,7 @@ func PatternsIndecision() *CandlestickPatternConfig {
 // PatternsTrend enables patterns that signal trend continuation.
 func PatternsTrend() *CandlestickPatternConfig {
 	return &CandlestickPatternConfig{
-		ReplaceSeriesLabel: true,
+		PreferPatternLabels: true,
 		EnabledPatterns: []string{
 			// Strong directional patterns
 			CandlestickPatternBeltHoldBull, CandlestickPatternBeltHoldBear,

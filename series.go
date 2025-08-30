@@ -2041,10 +2041,16 @@ type OHLCData struct {
 	Close float64
 }
 
+// CandleStyle controls candlestick body rendering: "filled", "traditional" (hollow bullish), or "outline".
+type CandleStyle string
+
 const (
-	CandleStyleFilled      = "filled"      // Always filled bodies
-	CandleStyleTraditional = "traditional" // Hollow bullish, filled bearish
-	CandleStyleOutline     = "outline"     // Always outlined only
+	// CandleStyleFilled always fills bodies.
+	CandleStyleFilled CandleStyle = "filled"
+	// CandleStyleTraditional uses hollow bullish, filled bearish.
+	CandleStyleTraditional CandleStyle = "traditional"
+	// CandleStyleOutline always outlines only.
+	CandleStyleOutline CandleStyle = "outline"
 )
 
 // CandlestickSeries references OHLC data for candlestick charts.
@@ -2083,10 +2089,10 @@ type CandlestickSeries struct {
 	// CloseTrendLine provides trend lines for close values.
 	CloseTrendLine []SeriesTrendLine
 
-	// ShowWicks when false hides the high-low wicks (showing only the body).
+	// ShowWicks hides wicks when false (body only). Overrides chart-level setting.
 	ShowWicks *bool
 	// CandleStyle specifies the visual style: "filled", "traditional", "outline".
-	CandleStyle string
+	CandleStyle CandleStyle
 	// PatternConfig configures automatic pattern detection and labeling.
 	PatternConfig *CandlestickPatternConfig
 }
@@ -2147,6 +2153,7 @@ func validateOHLCClose(ohlc OHLCData) bool {
 	return ohlc.High >= ohlc.Close && ohlc.Low <= ohlc.Close
 }
 
+// CandlestickSeriesList holds multiple CandlestickSeries values.
 type CandlestickSeriesList []CandlestickSeries
 
 func (k CandlestickSeriesList) names() []string {
@@ -2240,24 +2247,41 @@ func (k CandlestickSeriesList) ToGenericSeriesList() GenericSeriesList {
 	return result
 }
 
-// CandlestickSeriesOption provides series customization for NewSeriesListCandlestick.
+// CandlestickSeriesOption configures optional elements when building
+// candlestick series.
 type CandlestickSeriesOption struct {
-	Label          SeriesLabel
-	Names          []string
-	OpenMarkPoint  SeriesMarkPoint
-	OpenMarkLine   SeriesMarkLine
-	OpenTrendLine  []SeriesTrendLine
-	HighMarkPoint  SeriesMarkPoint
-	HighMarkLine   SeriesMarkLine
-	HighTrendLine  []SeriesTrendLine
-	LowMarkPoint   SeriesMarkPoint
-	LowMarkLine    SeriesMarkLine
-	LowTrendLine   []SeriesTrendLine
+	// Label styles the series labels.
+	Label SeriesLabel
+	// Names provide data names for each series.
+	Names []string
+	// OpenMarkPoint marks open prices.
+	OpenMarkPoint SeriesMarkPoint
+	// OpenMarkLine draws reference lines for open prices.
+	OpenMarkLine SeriesMarkLine
+	// OpenTrendLine adds trend lines based on opens.
+	OpenTrendLine []SeriesTrendLine
+	// HighMarkPoint marks high prices.
+	HighMarkPoint SeriesMarkPoint
+	// HighMarkLine draws reference lines for highs.
+	HighMarkLine SeriesMarkLine
+	// HighTrendLine adds trend lines based on highs.
+	HighTrendLine []SeriesTrendLine
+	// LowMarkPoint marks low prices.
+	LowMarkPoint SeriesMarkPoint
+	// LowMarkLine draws reference lines for lows.
+	LowMarkLine SeriesMarkLine
+	// LowTrendLine adds trend lines based on lows.
+	LowTrendLine []SeriesTrendLine
+	// CloseMarkPoint marks closing prices.
 	CloseMarkPoint SeriesMarkPoint
-	CloseMarkLine  SeriesMarkLine
+	// CloseMarkLine draws reference lines for closes.
+	CloseMarkLine SeriesMarkLine
+	// CloseTrendLine adds trend lines based on closes.
 	CloseTrendLine []SeriesTrendLine
-	CandleStyle    string
-	PatternConfig  *CandlestickPatternConfig
+	// CandleStyle sets the drawing style for candles.
+	CandleStyle CandleStyle
+	// PatternConfig configures candlestick pattern detection.
+	PatternConfig *CandlestickPatternConfig
 }
 
 // NewSeriesListCandlestick builds a SeriesList for candlestick charts from OHLC data.

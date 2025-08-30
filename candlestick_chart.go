@@ -15,7 +15,7 @@ func createPatternAwareLabelFormatter(originalSeries *CandlestickSeries, seriesI
 		if patternMap != nil {
 			patterns = patternMap[index]
 		}
-		if !originalSeries.PatternConfig.ReplaceSeriesLabel && originalSeries.Label.LabelFormatter != nil &&
+		if !originalSeries.PatternConfig.PreferPatternLabels && originalSeries.Label.LabelFormatter != nil &&
 			flagIs(true, originalSeries.Label.Show) { // prefer user label if provided
 			userText, userStyle := originalSeries.Label.LabelFormatter(index, name, val)
 			if userText != "" {
@@ -110,33 +110,21 @@ type CandlestickChartOption struct {
 	Title TitleOption
 	// Legend contains options for the data legend.
 	Legend LegendOption
-	// CandleWidth specifies the default width of candlestick bodies as a ratio (0.0-1.0).
+	// CandleWidth sets body width ratio (0.0–1.0, default 0.8).
 	CandleWidth float64
 	// ShowWicks controls whether high-low wicks are displayed by default. When nil, wicks are shown.
 	// Individual series can override this setting.
 	ShowWicks *bool
-	// WickWidth is the stroke width for high-low wicks in pixels.
+	// WickWidth sets wick stroke width in pixels (default 1.0).
 	WickWidth float64
-	// CandleMargin specifies the margin between candlesticks as a ratio (0.0-1.0).
+	// CandleMargin sets inter-series spacing ratio (0.0–1.0, auto by default).
+	// Only applies with multiple candlestick series.
 	CandleMargin *float64
-	// ValueFormatter defines how float values are rendered to strings, notably for numeric axis labels.
+	// ValueFormatter formats numeric values.
 	ValueFormatter ValueFormatter
 }
 
-// NewCandlestickOption returns an initialized CandlestickChartOption with default settings.
-func NewCandlestickOption() CandlestickChartOption {
-	return CandlestickChartOption{
-		SeriesList:     CandlestickSeriesList{},
-		Padding:        defaultPadding,
-		Theme:          GetDefaultTheme(),
-		YAxis:          make([]YAxisOption, 1),
-		ValueFormatter: defaultValueFormatter,
-		CandleWidth:    0.8, // Default 80% of available space
-		WickWidth:      1.0,
-	}
-}
-
-// NewCandlestickOptionWithData returns an initialized CandlestickChartOption with the SeriesList set with the provided data slices.
+// NewCandlestickOptionWithData creates a CandlestickChartOption from OHLC data slices.
 func NewCandlestickOptionWithData(data ...[]OHLCData) CandlestickChartOption {
 	seriesList := make(CandlestickSeriesList, len(data))
 	for i, ohlcData := range data {
@@ -153,7 +141,7 @@ func NewCandlestickOptionWithSeries(series ...CandlestickSeries) CandlestickChar
 		SeriesList:     seriesList,
 		Padding:        defaultPadding,
 		Theme:          GetDefaultTheme(),
-		YAxis:          make([]YAxisOption, len(series)), // Y axis count based on series count
+		YAxis:          make([]YAxisOption, getSeriesYAxisCount(seriesList)),
 		ValueFormatter: defaultValueFormatter,
 		CandleWidth:    0.8, // Default 80% of available space
 		WickWidth:      1.0,
@@ -181,6 +169,8 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 	candleWidthRatio := opt.CandleWidth
 	if candleWidthRatio <= 0 {
 		candleWidthRatio = 0.8 // Default 80% of available space
+	} else if candleWidthRatio > 1 {
+		candleWidthRatio = 1
 	}
 	candleWidth := int(float64(width) * candleWidthRatio / float64(maxDataCount))
 	if candleWidth < 1 {
@@ -196,8 +186,8 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 	// Use autoDivide for positioning
 	divideValues := result.xaxisRange.autoDivide()
 
-	// Calculate proper xValues for trendlines (similar to line/scatter charts)
-	xValues := boundaryGapAxisPositions(seriesPainter.Width(), false, maxDataCount)
+	// Center positions for each series index
+	seriesCenterValues := make([][]int, seriesList.len())
 
 	// render list must start with the markPointPainter, as it can influence label painters (if enabled)
 	markPointPainter := newMarkPointPainter(seriesPainter)
@@ -224,24 +214,23 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 		}
 		yRange := result.yaxisRanges[series.YAxisIndex]
 
-		// Create labelPainter for this series if labels are enabled OR patterns are configured
-		var labelPainter *seriesLabelPainter
-		if flagIs(true, series.Label.Show) || series.PatternConfig != nil {
-			// If patterns are configured, create an enhanced label formatter
-			var labelToUse SeriesLabel
-			var patternMap map[int][]PatternDetectionResult
-			if series.PatternConfig != nil {
-				patternMap = scanForCandlestickPatterns(series.Data, *series.PatternConfig)
-			}
-			if len(patternMap) > 0 {
-				labelToUse = series.Label // shallow copy
-				labelToUse.LabelFormatter = createPatternAwareLabelFormatter(series, seriesIndex, opt.Theme, patternMap)
-			} else {
-				// No patterns, use original label
-				labelToUse = series.Label
-			}
+		// pre-compute patterns for this series
+		var patternMap map[int][]PatternDetectionResult
+		if series.PatternConfig != nil {
+			patternMap = scanForCandlestickPatterns(series.Data, *series.PatternConfig)
+		}
 
-			labelPainter = newSeriesLabelPainter(seriesPainter, seriesNames, labelToUse, opt.Theme, opt.Padding.Right)
+		// Create labelPainter only when labels are enabled or patterns were detected
+		var labelPainter *seriesLabelPainter
+		if flagIs(true, series.Label.Show) || len(patternMap) > 0 {
+			if len(patternMap) > 0 {
+				labelCopy := series.Label
+				labelCopy.LabelFormatter = createPatternAwareLabelFormatter(series, seriesIndex, opt.Theme, patternMap)
+				labelCopy.Show = Ptr(true) // Enable labels when patterns are detected, even if user labels are disabled
+				labelPainter = newSeriesLabelPainter(seriesPainter, seriesNames, labelCopy, opt.Theme, opt.Padding.Right)
+			} else {
+				labelPainter = newSeriesLabelPainter(seriesPainter, seriesNames, series.Label, opt.Theme, opt.Padding.Right)
+			}
 			rendererList = append(rendererList, labelPainter)
 		}
 		allLabelPainters[seriesIndex] = labelPainter
@@ -254,19 +243,10 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 		seriesOpenPoints[seriesIndex] = make([]Point, len(series.Data))
 		seriesHighPoints[seriesIndex] = make([]Point, len(series.Data))
 		seriesLowPoints[seriesIndex] = make([]Point, len(series.Data))
+		seriesCenterValues[seriesIndex] = make([]int, len(series.Data))
 		// Render each candlestick in this series
 		for j, ohlc := range series.Data {
-			if j >= maxDataCount {
-				continue
-			} else if j >= len(divideValues) {
-				continue
-			} else if !validateOHLCData(ohlc) { // if invalid mark as null and skip
-				// Mark all OHLC points as invalid
-				invalidPoint := Point{X: divideValues[j], Y: math.MaxInt32}
-				seriesClosePoints[seriesIndex][j] = invalidPoint
-				seriesOpenPoints[seriesIndex][j] = invalidPoint
-				seriesHighPoints[seriesIndex][j] = invalidPoint
-				seriesLowPoints[seriesIndex][j] = invalidPoint
+			if j >= maxDataCount || j >= len(divideValues) {
 				continue
 			}
 
@@ -316,6 +296,17 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 				// x = divideValues[j] + margin + index*(barWidth+barMargin)
 				x := divideValues[j] + groupMargin + seriesIndex*(candleWidth+candleMargin)
 				centerX = x + candleWidth/2
+			}
+			seriesCenterValues[seriesIndex][j] = centerX
+
+			if !validateOHLCData(ohlc) { // if invalid mark as null and skip
+				// Mark all OHLC points as invalid
+				invalidPoint := Point{X: centerX, Y: math.MaxInt32}
+				seriesClosePoints[seriesIndex][j] = invalidPoint
+				seriesOpenPoints[seriesIndex][j] = invalidPoint
+				seriesHighPoints[seriesIndex][j] = invalidPoint
+				seriesLowPoints[seriesIndex][j] = invalidPoint
+				continue
 			}
 
 			leftX := centerX - candleWidth/2
@@ -534,7 +525,7 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 				}
 				trendLinePainter.add(trendLineRenderOption{
 					defaultStrokeColor: opt.Theme.GetSeriesTrendColor(seriesIndex),
-					xValues:            xValues,
+					xValues:            seriesCenterValues[seriesIndex],
 					seriesValues:       values,
 					axisRange:          yRange,
 					trends:             component.trendLines,
