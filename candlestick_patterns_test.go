@@ -333,7 +333,7 @@ func newCandlestickWithPatterns(data []OHLCData, options ...CandlestickPatternCo
 	// Start with defaults and override with provided options
 	config := &CandlestickPatternConfig{
 		PreferPatternLabels: true,
-		EnabledPatterns:     PatternsAll().EnabledPatterns,
+		EnabledPatterns:     (&CandlestickPatternConfig{}).WithPatternsAll().EnabledPatterns,
 		DojiThreshold:       0.001,
 		ShadowTolerance:     0.01,
 		ShadowRatio:         2.0,
@@ -381,7 +381,7 @@ func TestPatternIntegration(t *testing.T) {
 
 	// Test that all advanced patterns are detected in a comprehensive dataset
 	data := makeAdvancedPatternTestData()
-	opt := PatternsAll()
+	opt := (&CandlestickPatternConfig{}).WithPatternsAll()
 	opt.DojiThreshold = 0.01
 	opt.ShadowRatio = 2.0
 	opt.EngulfingMinSize = 0.8
@@ -563,7 +563,7 @@ func TestPatternScanningComprehensive(t *testing.T) {
 		{Open: 114, High: 115, Low: 108, Close: 109}, // 26: Third crow
 	}
 
-	opt := PatternsAll()
+	opt := (&CandlestickPatternConfig{}).WithPatternsAll()
 	opt.DojiThreshold = 0.01
 	opt.ShadowRatio = 2.0
 	opt.EngulfingMinSize = 0.8
@@ -581,17 +581,17 @@ func TestPatternScanningComprehensive(t *testing.T) {
 
 	// Check expected patterns
 	assert.Len(t, uniquePatterns, 13)
-	assert.Contains(t, patternsByIndex[1], CandlestickPatternDoji)
-	assert.Contains(t, patternsByIndex[2], CandlestickPatternHammer)
-	assert.Contains(t, patternsByIndex[3], CandlestickPatternShootingStar)
-	assert.Contains(t, patternsByIndex[4], CandlestickPatternGravestone)
-	assert.Contains(t, patternsByIndex[5], CandlestickPatternDragonfly)
-	assert.Contains(t, patternsByIndex[8], CandlestickPatternMorningStar)
-	assert.Contains(t, patternsByIndex[11], CandlestickPatternEveningStar)
-	assert.Contains(t, patternsByIndex[12], CandlestickPatternMarubozuBull)
-	assert.Contains(t, patternsByIndex[13], CandlestickPatternMarubozuBear)
-	assert.Contains(t, patternsByIndex[16], CandlestickPatternPiercingLine)
-	assert.Contains(t, patternsByIndex[18], CandlestickPatternDarkCloudCover)
+	assert.Contains(t, patternsByIndex[1], "doji")
+	assert.Contains(t, patternsByIndex[2], "hammer")
+	assert.Contains(t, patternsByIndex[3], "shooting_star")
+	assert.Contains(t, patternsByIndex[4], "gravestone_doji")
+	assert.Contains(t, patternsByIndex[5], "dragonfly_doji")
+	assert.Contains(t, patternsByIndex[8], "morning_star")
+	assert.Contains(t, patternsByIndex[11], "evening_star")
+	assert.Contains(t, patternsByIndex[12], "marubozu_bull")
+	assert.Contains(t, patternsByIndex[13], "marubozu_bear")
+	assert.Contains(t, patternsByIndex[16], "piercing_line")
+	assert.Contains(t, patternsByIndex[18], "dark_cloud_cover")
 }
 
 func TestPatternConfigIntegration(t *testing.T) {
@@ -618,20 +618,20 @@ func TestPatternConfigIntegration(t *testing.T) {
 		}, false},
 		{"doji_only_replace_mode", data, &CandlestickPatternConfig{
 			PreferPatternLabels: true,
-			EnabledPatterns:     []string{CandlestickPatternDoji},
+			EnabledPatterns:     []string{"doji"},
 			DojiThreshold:       0.001, ShadowTolerance: 0.01, ShadowRatio: 2.0, EngulfingMinSize: 0.8,
 		}, false},
 		{"multiple_patterns_complement_mode", data, &CandlestickPatternConfig{
 			PreferPatternLabels: false,
-			EnabledPatterns:     []string{CandlestickPatternDoji, CandlestickPatternShootingStar},
+			EnabledPatterns:     []string{"doji", "shooting_star"},
 			DojiThreshold:       0.001, ShadowTolerance: 0.01, ShadowRatio: 2.0, EngulfingMinSize: 0.8,
 		}, false},
-		{"all_patterns_enabled", data, PatternsAll(), false},
-		{"core_patterns_only", data, PatternsCore(), false},
+		{"all_patterns_enabled", data, (&CandlestickPatternConfig{}).WithPatternsAll(), false},
+		{"core_patterns_only", data, (&CandlestickPatternConfig{}).WithPatternsAll(), false},
 		// Edge cases
 		{"empty_data", []OHLCData{}, &CandlestickPatternConfig{
 			PreferPatternLabels: true,
-			EnabledPatterns:     []string{CandlestickPatternDoji},
+			EnabledPatterns:     []string{"doji"},
 			DojiThreshold:       0.001, ShadowTolerance: 0.01, ShadowRatio: 2.0, EngulfingMinSize: 0.8,
 		}, true},
 		{"invalid_ohlc_data", []OHLCData{
@@ -639,7 +639,7 @@ func TestPatternConfigIntegration(t *testing.T) {
 			{Open: 100, High: 90, Low: 110, Close: 105},
 		}, &CandlestickPatternConfig{
 			PreferPatternLabels: true,
-			EnabledPatterns:     []string{CandlestickPatternDoji},
+			EnabledPatterns:     []string{"doji"},
 			DojiThreshold:       0.001, ShadowTolerance: 0.01, ShadowRatio: 2.0, EngulfingMinSize: 0.8,
 		}, false},
 		{"nil_enabled_patterns", data, &CandlestickPatternConfig{
@@ -684,45 +684,42 @@ func TestConvenienceFunctions(t *testing.T) {
 	}{
 		{
 			name:   "patterns_all",
-			config: PatternsAll(),
+			config: (&CandlestickPatternConfig{}).WithPatternsAll(),
 			validate: func(t *testing.T, config *CandlestickPatternConfig) {
-				assert.True(t, config.PreferPatternLabels)
-				assert.Contains(t, config.EnabledPatterns, CandlestickPatternDoji)
-				assert.Contains(t, config.EnabledPatterns, CandlestickPatternHammer)
+				assert.Contains(t, config.EnabledPatterns, "doji")
+				assert.Contains(t, config.EnabledPatterns, "hammer")
 				assert.GreaterOrEqual(t, len(config.EnabledPatterns), 10)
 			},
 		},
 		{
 			name:   "patterns_core",
-			config: PatternsCore(),
+			config: (&CandlestickPatternConfig{}).WithPatternsCore(),
 			validate: func(t *testing.T, config *CandlestickPatternConfig) {
-				assert.True(t, config.PreferPatternLabels)
-				assert.Contains(t, config.EnabledPatterns, CandlestickPatternEngulfingBull)
-				assert.Contains(t, config.EnabledPatterns, CandlestickPatternHammer)
+				assert.Contains(t, config.EnabledPatterns, "engulfing_bull")
+				assert.Contains(t, config.EnabledPatterns, "hammer")
 				assert.LessOrEqual(t, len(config.EnabledPatterns), 8)
 			},
 		},
 		{
 			name:   "patterns_bullish",
-			config: PatternsBullish(),
+			config: (&CandlestickPatternConfig{}).WithPatternsBullish(),
 			validate: func(t *testing.T, config *CandlestickPatternConfig) {
-				assert.True(t, config.PreferPatternLabels)
-				assert.Contains(t, config.EnabledPatterns, CandlestickPatternHammer)
-				assert.NotContains(t, config.EnabledPatterns, CandlestickPatternShootingStar)
+				assert.Contains(t, config.EnabledPatterns, "hammer")
+				assert.NotContains(t, config.EnabledPatterns, "shooting_star")
 			},
 		},
 		{
 			name: "enable_patterns_custom",
 			config: &CandlestickPatternConfig{
 				PreferPatternLabels: true,
-				EnabledPatterns:     []string{CandlestickPatternDoji, CandlestickPatternHammer},
+				EnabledPatterns:     []string{"doji", "hammer"},
 				DojiThreshold:       0.001, ShadowTolerance: 0.01, ShadowRatio: 2.0, EngulfingMinSize: 0.8,
 			},
 			validate: func(t *testing.T, config *CandlestickPatternConfig) {
 				assert.True(t, config.PreferPatternLabels)
 				assert.Len(t, config.EnabledPatterns, 2)
-				assert.Contains(t, config.EnabledPatterns, CandlestickPatternDoji)
-				assert.Contains(t, config.EnabledPatterns, CandlestickPatternHammer)
+				assert.Contains(t, config.EnabledPatterns, "doji")
+				assert.Contains(t, config.EnabledPatterns, "hammer")
 			},
 		},
 	}
@@ -780,7 +777,7 @@ func TestPatternFormatterCustom(t *testing.T) {
 	t.Run("pattern_priority_mode", func(t *testing.T) {
 		cfg := CandlestickPatternConfig{
 			PreferPatternLabels: true,
-			EnabledPatterns:     []string{CandlestickPatternDoji},
+			EnabledPatterns:     []string{"doji"},
 			DojiThreshold:       0.001,
 			PatternFormatter:    customFormatter,
 		}
@@ -791,7 +788,7 @@ func TestPatternFormatterCustom(t *testing.T) {
 		require.NoError(t, err)
 		s := string(svg)
 		// With pattern priority, pattern label should be shown at index 1 where Doji is detected
-		assert.Contains(t, s, "PF:"+CandlestickPatternDoji)
+		assert.Contains(t, s, "PF:"+"doji")
 		// User labels should still appear at indices 0 and 2 where no patterns are detected
 		assert.Contains(t, s, "UserLabel")
 	})
@@ -799,7 +796,7 @@ func TestPatternFormatterCustom(t *testing.T) {
 	t.Run("user_priority_mode", func(t *testing.T) {
 		cfg := CandlestickPatternConfig{
 			PreferPatternLabels: false,
-			EnabledPatterns:     []string{CandlestickPatternDoji},
+			EnabledPatterns:     []string{"doji"},
 			DojiThreshold:       0.001,
 			PatternFormatter:    customFormatter,
 		}
@@ -817,7 +814,7 @@ func TestPatternFormatterCustom(t *testing.T) {
 	t.Run("no_user_labels_shows_patterns", func(t *testing.T) {
 		cfg := CandlestickPatternConfig{
 			PreferPatternLabels: false,
-			EnabledPatterns:     []string{CandlestickPatternDoji},
+			EnabledPatterns:     []string{"doji"},
 			DojiThreshold:       0.001,
 			PatternFormatter:    customFormatter,
 		}
@@ -828,7 +825,7 @@ func TestPatternFormatterCustom(t *testing.T) {
 		require.NoError(t, err)
 		s := string(svg)
 		// When no user labels are provided, patterns should be shown
-		assert.Contains(t, s, "PF:"+CandlestickPatternDoji)
+		assert.Contains(t, s, "PF:"+"doji")
 		assert.NotContains(t, s, "UserLabel")
 	})
 }
@@ -1123,7 +1120,7 @@ func TestCandlestickChartPatterns(t *testing.T) {
 				})
 				opt.SeriesList[0].PatternConfig.EnabledPatterns = bulk.SliceFilterInPlace(func(pattern string) bool {
 					// remove high volume patterns
-					if pattern == CandlestickPatternDoji {
+					if pattern == "doji" {
 						return false
 					}
 					return true
@@ -1162,8 +1159,8 @@ func TestCandlestickChartPatterns(t *testing.T) {
 				})
 				opt.XAxis = XAxisOption{Show: Ptr(false)}
 				opt.SeriesList[0].PatternConfig.EnabledPatterns = []string{
-					CandlestickPatternMorningStar,
-					CandlestickPatternEveningStar,
+					"morning_star",
+					"evening_star",
 				}
 				return opt
 			},
@@ -1188,7 +1185,7 @@ func TestCandlestickChartPatterns(t *testing.T) {
 					ShadowRatio:      2.0,
 					EngulfingMinSize: 0.8,
 				})
-				opt.SeriesList[0].PatternConfig = PatternsBullish()
+				opt.SeriesList[0].PatternConfig = (&CandlestickPatternConfig{}).WithPatternsBullish()
 				opt.XAxis = XAxisOption{Show: Ptr(false)}
 				return opt
 			},
@@ -1213,7 +1210,7 @@ func TestCandlestickChartPatterns(t *testing.T) {
 					ShadowRatio:      2.0,
 					EngulfingMinSize: 0.8,
 				})
-				opt.SeriesList[0].PatternConfig = PatternsBearish()
+				opt.SeriesList[0].PatternConfig = (&CandlestickPatternConfig{}).WithPatternsBearish()
 				opt.XAxis = XAxisOption{Show: Ptr(false)}
 				return opt
 			},
@@ -1252,7 +1249,7 @@ func TestCandlestickChartPatterns(t *testing.T) {
 					DojiThreshold: 0.01,
 					ShadowRatio:   2.0,
 				})
-				opt.SeriesList[0].PatternConfig = PatternsReversal()
+				opt.SeriesList[0].PatternConfig = (&CandlestickPatternConfig{}).WithPatternsReversal()
 				opt.XAxis = XAxisOption{Show: Ptr(false)}
 				return opt
 			},
@@ -1277,7 +1274,7 @@ func TestCandlestickChartPatterns(t *testing.T) {
 					ShadowRatio:      2.0,
 					EngulfingMinSize: 0.8,
 				})
-				opt.SeriesList[0].PatternConfig = PatternsTrend()
+				opt.SeriesList[0].PatternConfig = (&CandlestickPatternConfig{}).WithPatternsTrend()
 				opt.XAxis = XAxisOption{Show: Ptr(false)}
 				return opt
 			},
@@ -1441,12 +1438,12 @@ func TestCandlestickPatternConfigMergePatterns(t *testing.T) {
 	t.Run("merge_two_configs", func(t *testing.T) {
 		config1 := &CandlestickPatternConfig{
 			PreferPatternLabels: true,
-			EnabledPatterns:     []string{CandlestickPatternDoji, CandlestickPatternHammer},
+			EnabledPatterns:     []string{"doji", "hammer"},
 			DojiThreshold:       0.01,
 		}
 		config2 := &CandlestickPatternConfig{
 			PreferPatternLabels: false,
-			EnabledPatterns:     []string{CandlestickPatternShootingStar, CandlestickPatternDoji}, // Doji is duplicate
+			EnabledPatterns:     []string{"shooting_star", "doji"}, // Doji is duplicate
 			DojiThreshold:       0.02,
 		}
 
@@ -1458,15 +1455,15 @@ func TestCandlestickPatternConfigMergePatterns(t *testing.T) {
 
 		// Should have union of patterns without duplicates, preserving order
 		assert.Len(t, merged.EnabledPatterns, 3)
-		assert.Equal(t, CandlestickPatternDoji, merged.EnabledPatterns[0])
-		assert.Equal(t, CandlestickPatternHammer, merged.EnabledPatterns[1])
-		assert.Equal(t, CandlestickPatternShootingStar, merged.EnabledPatterns[2])
+		assert.Equal(t, "doji", merged.EnabledPatterns[0])
+		assert.Equal(t, "hammer", merged.EnabledPatterns[1])
+		assert.Equal(t, "shooting_star", merged.EnabledPatterns[2])
 	})
 
 	t.Run("merge_with_nil", func(t *testing.T) {
 		config := &CandlestickPatternConfig{
 			PreferPatternLabels: true,
-			EnabledPatterns:     []string{CandlestickPatternDoji, CandlestickPatternHammer},
+			EnabledPatterns:     []string{"doji", "hammer"},
 		}
 
 		// Merge nil with config
@@ -1489,17 +1486,17 @@ func TestCandlestickPatternConfigMergePatterns(t *testing.T) {
 
 	t.Run("merge_identical_patterns", func(t *testing.T) {
 		config1 := &CandlestickPatternConfig{
-			EnabledPatterns: []string{CandlestickPatternDoji, CandlestickPatternHammer, CandlestickPatternShootingStar},
+			EnabledPatterns: []string{"doji", "hammer", "shooting_star"},
 		}
 		config2 := &CandlestickPatternConfig{
-			EnabledPatterns: []string{CandlestickPatternDoji, CandlestickPatternHammer, CandlestickPatternShootingStar},
+			EnabledPatterns: []string{"doji", "hammer", "shooting_star"},
 		}
 
 		merged := config1.MergePatterns(config2)
 		assert.Len(t, merged.EnabledPatterns, 3) // No duplicates
-		assert.Equal(t, CandlestickPatternDoji, merged.EnabledPatterns[0])
-		assert.Equal(t, CandlestickPatternHammer, merged.EnabledPatterns[1])
-		assert.Equal(t, CandlestickPatternShootingStar, merged.EnabledPatterns[2])
+		assert.Equal(t, "doji", merged.EnabledPatterns[0])
+		assert.Equal(t, "hammer", merged.EnabledPatterns[1])
+		assert.Equal(t, "shooting_star", merged.EnabledPatterns[2])
 	})
 
 	t.Run("merge_empty_patterns", func(t *testing.T) {
@@ -1508,19 +1505,19 @@ func TestCandlestickPatternConfigMergePatterns(t *testing.T) {
 			EnabledPatterns:     []string{},
 		}
 		config2 := &CandlestickPatternConfig{
-			EnabledPatterns: []string{CandlestickPatternDoji, CandlestickPatternHammer},
+			EnabledPatterns: []string{"doji", "hammer"},
 		}
 
 		merged := config1.MergePatterns(config2)
 		assert.True(t, merged.PreferPatternLabels)
 		assert.Len(t, merged.EnabledPatterns, 2)
-		assert.Equal(t, CandlestickPatternDoji, merged.EnabledPatterns[0])
-		assert.Equal(t, CandlestickPatternHammer, merged.EnabledPatterns[1])
+		assert.Equal(t, "doji", merged.EnabledPatterns[0])
+		assert.Equal(t, "hammer", merged.EnabledPatterns[1])
 	})
 
 	t.Run("merge_predefined_configs", func(t *testing.T) {
-		core := PatternsCore()
-		trend := PatternsTrend()
+		core := (&CandlestickPatternConfig{}).WithPatternsCore()
+		trend := (&CandlestickPatternConfig{}).WithPatternsTrend()
 
 		merged := core.MergePatterns(trend)
 
@@ -1531,8 +1528,8 @@ func TestCandlestickPatternConfigMergePatterns(t *testing.T) {
 		assert.Equal(t, core.PreferPatternLabels, merged.PreferPatternLabels)
 
 		// Should contain patterns from both
-		assert.Contains(t, merged.EnabledPatterns, CandlestickPatternEngulfingBull) // From core
-		assert.Contains(t, merged.EnabledPatterns, CandlestickPatternMarubozuBull)  // From Trend
+		assert.Contains(t, merged.EnabledPatterns, "engulfing_bull") // From core
+		assert.Contains(t, merged.EnabledPatterns, "marubozu_bull")  // From Trend
 	})
 }
 

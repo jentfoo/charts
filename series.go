@@ -66,6 +66,8 @@ type LabelStyle struct {
 type SeriesLabelFormatter func(index int, name string, val float64) (string, *LabelStyle)
 
 const (
+	// TODO - v0.6 - Move these constants to types, or builder pattern on structs similar to CandlestickPatternConfig
+
 	SeriesMarkTypeMax     = "max"
 	SeriesMarkTypeMin     = "min"
 	SeriesMarkTypeAverage = "average"

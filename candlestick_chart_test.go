@@ -237,11 +237,13 @@ func TestCandlestickChart(t *testing.T) {
 							return "User Label", nil
 						},
 					},
-					PatternConfig: &CandlestickPatternConfig{
-						PreferPatternLabels: true,
-						EnabledPatterns:     []string{CandlestickPatternDoji},
-						DojiThreshold:       0.001, ShadowTolerance: 0.01, ShadowRatio: 2.0, EngulfingMinSize: 0.8,
-					},
+					PatternConfig: (&CandlestickPatternConfig{}).
+						WithPreferPatternLabels(true).
+						WithDoji().
+						WithDojiThreshold(0.001).
+						WithShadowTolerance(0.01).
+						WithShadowRatio(2.0).
+						WithEngulfingMinSize(0.8),
 				}
 				return CandlestickChartOption{
 					Padding: NewBoxEqual(10),

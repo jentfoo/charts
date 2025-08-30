@@ -63,7 +63,7 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 				Data:          ohlcData,
 				Name:          "Stock Price with Patterns",
 				CandleStyle:   charts.CandleStyleFilled,
-				PatternConfig: charts.PatternsAll(),
+				PatternConfig: (&charts.CandlestickPatternConfig{}).WithPatternsAll(),
 				Label: charts.SeriesLabel{
 					Show: charts.Ptr(true),
 				},
@@ -85,7 +85,7 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 			series: charts.CandlestickSeries{
 				Data:          ohlcData,
 				Name:          "Important Patterns",
-				PatternConfig: charts.PatternsCore(),
+				PatternConfig: (&charts.CandlestickPatternConfig{}).WithPatternsCore(),
 				Label: charts.SeriesLabel{
 					Show: charts.Ptr(true),
 				},
@@ -100,14 +100,10 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 			series: charts.CandlestickSeries{
 				Data: ohlcData,
 				Name: "Custom Selection",
-				PatternConfig: &charts.CandlestickPatternConfig{
-					PreferPatternLabels: true,
-					EnabledPatterns: []string{
-						charts.CandlestickPatternDoji,
-						charts.CandlestickPatternHammer,
-						charts.CandlestickPatternEngulfingBull,
-					},
-				},
+				PatternConfig: (&charts.CandlestickPatternConfig{}).
+					WithDoji().
+					WithHammer().
+					WithEngulfingBull(),
 				Label: charts.SeriesLabel{
 					Show: charts.Ptr(true),
 				},
@@ -123,9 +119,9 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 				Data: ohlcData,
 				Name: "Complement Mode",
 				PatternConfig: func() *charts.CandlestickPatternConfig {
-					config := charts.PatternsCore()
-					config.PreferPatternLabels = false // Complement mode
-					return config
+					return (&charts.CandlestickPatternConfig{}).
+						WithPatternsCore().
+						WithPreferPatternLabels(false) // Complement mode
 				}(),
 				Label: charts.SeriesLabel{
 					Show: charts.Ptr(true),
@@ -150,7 +146,7 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 				Name: "Custom Format",
 				PatternConfig: &charts.CandlestickPatternConfig{
 					PreferPatternLabels: true,
-					EnabledPatterns:     charts.PatternsAll().EnabledPatterns,
+					EnabledPatterns:     (&charts.CandlestickPatternConfig{}).WithPatternsAll().EnabledPatterns,
 					PatternFormatter: func(patterns []charts.PatternDetectionResult, seriesName string, value float64) (string, *charts.LabelStyle) {
 						if len(patterns) == 0 {
 							return "", nil
@@ -190,7 +186,7 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 			series: charts.CandlestickSeries{
 				Data:          ohlcData,
 				Name:          "Bullish Only",
-				PatternConfig: charts.PatternsBullish(),
+				PatternConfig: (&charts.CandlestickPatternConfig{}).WithPatternsBullish(),
 				Label: charts.SeriesLabel{
 					Show: charts.Ptr(true),
 				},

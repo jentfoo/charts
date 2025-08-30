@@ -8,40 +8,40 @@ import (
 const (
 	/** Single candle patterns **/
 
-	// CandlestickPatternDoji represents a doji candle where open and close prices are nearly equal, indicating market indecision.
-	CandlestickPatternDoji = "doji"
-	// CandlestickPatternHammer represents a hammer candle with a small body and long lower shadow, signaling potential bullish reversal.
-	CandlestickPatternHammer = "hammer"
-	// CandlestickPatternInvertedHammer represents an inverted hammer with a small body and long upper shadow, signaling potential bullish reversal.
-	CandlestickPatternInvertedHammer = "inverted_hammer"
-	// CandlestickPatternShootingStar represents a shooting star with a small body and long upper shadow, signaling potential bearish reversal.
-	CandlestickPatternShootingStar = "shooting_star"
-	// CandlestickPatternGravestone represents a gravestone doji with long upper shadow and no lower shadow, indicating bearish sentiment.
-	CandlestickPatternGravestone = "gravestone_doji"
-	// CandlestickPatternDragonfly represents a dragonfly doji with long lower shadow and no upper shadow, indicating bullish sentiment.
-	CandlestickPatternDragonfly = "dragonfly_doji"
-	// CandlestickPatternMarubozuBull represents a bullish marubozu with no shadows and closing at the high, showing strong buying pressure.
-	CandlestickPatternMarubozuBull = "marubozu_bull"
-	// CandlestickPatternMarubozuBear represents a bearish marubozu with no shadows and closing at the low, showing strong selling pressure.
-	CandlestickPatternMarubozuBear = "marubozu_bear"
+	// candlestickPatternDoji represents a doji candle where open and close prices are nearly equal, indicating market indecision.
+	candlestickPatternDoji = "doji"
+	// candlestickPatternHammer represents a hammer candle with a small body and long lower shadow, signaling potential bullish reversal.
+	candlestickPatternHammer = "hammer"
+	// candlestickPatternInvertedHammer represents an inverted hammer with a small body and long upper shadow, signaling potential bullish reversal.
+	candlestickPatternInvertedHammer = "inverted_hammer"
+	// candlestickPatternShootingStar represents a shooting star with a small body and long upper shadow, signaling potential bearish reversal.
+	candlestickPatternShootingStar = "shooting_star"
+	// candlestickPatternGravestone represents a gravestone doji with long upper shadow and no lower shadow, indicating bearish sentiment.
+	candlestickPatternGravestone = "gravestone_doji"
+	// candlestickPatternDragonfly represents a dragonfly doji with long lower shadow and no upper shadow, indicating bullish sentiment.
+	candlestickPatternDragonfly = "dragonfly_doji"
+	// candlestickPatternMarubozuBull represents a bullish marubozu with no shadows and closing at the high, showing strong buying pressure.
+	candlestickPatternMarubozuBull = "marubozu_bull"
+	// candlestickPatternMarubozuBear represents a bearish marubozu with no shadows and closing at the low, showing strong selling pressure.
+	candlestickPatternMarubozuBear = "marubozu_bear"
 
 	/** Two candle patterns **/
 
-	// CandlestickPatternEngulfingBull represents a bullish engulfing pattern where a large bullish candle engulfs the previous bearish candle.
-	CandlestickPatternEngulfingBull = "engulfing_bull"
-	// CandlestickPatternEngulfingBear represents a bearish engulfing pattern where a large bearish candle engulfs the previous bullish candle.
-	CandlestickPatternEngulfingBear = "engulfing_bear"
-	// CandlestickPatternPiercingLine represents a piercing line where a bullish candle closes above the midpoint of the previous bearish candle.
-	CandlestickPatternPiercingLine = "piercing_line"
-	// CandlestickPatternDarkCloudCover represents a dark cloud cover where a bearish candle closes below the midpoint of the previous bullish candle.
-	CandlestickPatternDarkCloudCover = "dark_cloud_cover"
+	// candlestickPatternEngulfingBull represents a bullish engulfing pattern where a large bullish candle engulfs the previous bearish candle.
+	candlestickPatternEngulfingBull = "engulfing_bull"
+	// candlestickPatternEngulfingBear represents a bearish engulfing pattern where a large bearish candle engulfs the previous bullish candle.
+	candlestickPatternEngulfingBear = "engulfing_bear"
+	// candlestickPatternPiercingLine represents a piercing line where a bullish candle closes above the midpoint of the previous bearish candle.
+	candlestickPatternPiercingLine = "piercing_line"
+	// candlestickPatternDarkCloudCover represents a dark cloud cover where a bearish candle closes below the midpoint of the previous bullish candle.
+	candlestickPatternDarkCloudCover = "dark_cloud_cover"
 
 	/** Three candle patterns **/
 
-	// CandlestickPatternMorningStar represents a bullish morning star pattern with a doji or small candle between two opposite-colored candles.
-	CandlestickPatternMorningStar = "morning_star"
-	// CandlestickPatternEveningStar represents a bearish evening star pattern with a doji or small candle between two opposite-colored candles.
-	CandlestickPatternEveningStar = "evening_star"
+	// candlestickPatternMorningStar represents a bullish morning star pattern with a doji or small candle between two opposite-colored candles.
+	candlestickPatternMorningStar = "morning_star"
+	// candlestickPatternEveningStar represents a bearish evening star pattern with a doji or small candle between two opposite-colored candles.
+	candlestickPatternEveningStar = "evening_star"
 )
 
 // PatternFormatter allows custom formatting of detected patterns.
@@ -59,7 +59,7 @@ type CandlestickPatternConfig struct {
 
 	// EnabledPatterns lists specific patterns to detect
 	// nil or empty = no patterns detected (PatternConfig must be set to enable)
-	// ["doji", "hammer"] = only these patterns
+	// Use With* methods to configure patterns
 	EnabledPatterns []string
 
 	// DojiThreshold is the body-to-range ratio threshold for doji pattern detection.
@@ -157,85 +157,212 @@ type PatternDetectionResult struct {
 	PatternType string
 }
 
-// PatternsAll enables all standard patterns.
-func PatternsAll() *CandlestickPatternConfig {
-	return &CandlestickPatternConfig{
-		PreferPatternLabels: true,
-		EnabledPatterns: []string{
-			// Strong reversal patterns (highest priority)
-			CandlestickPatternEngulfingBull, CandlestickPatternEngulfingBear, CandlestickPatternHammer,
-			CandlestickPatternMorningStar, CandlestickPatternEveningStar, CandlestickPatternShootingStar,
-			// Moderate patterns
-			CandlestickPatternDarkCloudCover, CandlestickPatternDragonfly, CandlestickPatternGravestone,
-			CandlestickPatternMarubozuBear, CandlestickPatternMarubozuBull, CandlestickPatternPiercingLine,
-			// Neutral/indecision patterns
-			CandlestickPatternDoji, CandlestickPatternInvertedHammer,
-		},
+// addPattern is a helper to add a pattern to the list if not already present.
+func (c *CandlestickPatternConfig) addPattern(pattern string) {
+	for _, p := range c.EnabledPatterns {
+		if p == pattern {
+			return
+		}
+	}
+	c.EnabledPatterns = append(c.EnabledPatterns, pattern)
+}
+
+// addPattern is a helper to add a set of patterns to the list if not already present.
+func (c *CandlestickPatternConfig) addPatterns(patterns ...string) {
+	if len(c.EnabledPatterns) == 0 {
+		c.EnabledPatterns = patterns
+	} else {
+		for _, pattern := range patterns {
+			c.addPattern(pattern)
+		}
 	}
 }
 
-// PatternsCore enables only the most reliable patterns that work well without volume.
-func PatternsCore() *CandlestickPatternConfig {
-	return &CandlestickPatternConfig{
-		PreferPatternLabels: true,
-		EnabledPatterns: []string{
-			// Most reliable without volume (6-8 patterns)
-			CandlestickPatternEngulfingBull, CandlestickPatternEngulfingBear, // Strong reversal, clear visual
-			CandlestickPatternHammer, CandlestickPatternShootingStar, // Single bar reversal, location matters
-			CandlestickPatternMorningStar, CandlestickPatternEveningStar, // Multi-candle reversal confirmation
-		},
-	}
+// WithPatternsAll enables all standard patterns.
+func (c *CandlestickPatternConfig) WithPatternsAll() *CandlestickPatternConfig {
+	c.addPatterns(
+		// Strong reversal patterns
+		candlestickPatternEngulfingBull, candlestickPatternEngulfingBear, candlestickPatternHammer,
+		candlestickPatternMorningStar, candlestickPatternEveningStar, candlestickPatternShootingStar,
+		// Moderate patterns
+		candlestickPatternDarkCloudCover, candlestickPatternDragonfly, candlestickPatternGravestone,
+		candlestickPatternMarubozuBear, candlestickPatternMarubozuBull, candlestickPatternPiercingLine,
+		// Neutral/indecision patterns
+		candlestickPatternDoji, candlestickPatternInvertedHammer,
+	)
+	return c
 }
 
-// PatternsBullish enables only bullish patterns.
-func PatternsBullish() *CandlestickPatternConfig {
-	return &CandlestickPatternConfig{
-		PreferPatternLabels: true,
-		EnabledPatterns: []string{
-			CandlestickPatternHammer, CandlestickPatternInvertedHammer, CandlestickPatternDragonfly,
-			CandlestickPatternMarubozuBull, CandlestickPatternEngulfingBull, CandlestickPatternPiercingLine,
-			CandlestickPatternMorningStar,
-		},
-	}
+// WithPatternsCore enables only the most reliable patterns that work well without volume.
+func (c *CandlestickPatternConfig) WithPatternsCore() *CandlestickPatternConfig {
+	c.addPatterns(
+		candlestickPatternEngulfingBull, candlestickPatternEngulfingBear,
+		candlestickPatternHammer, candlestickPatternShootingStar,
+		candlestickPatternMorningStar, candlestickPatternEveningStar,
+	)
+	return c
 }
 
-// PatternsBearish enables only bearish patterns.
-func PatternsBearish() *CandlestickPatternConfig {
-	return &CandlestickPatternConfig{
-		PreferPatternLabels: true,
-		EnabledPatterns: []string{
-			CandlestickPatternShootingStar, CandlestickPatternGravestone, CandlestickPatternMarubozuBear,
-			CandlestickPatternEngulfingBear, CandlestickPatternDarkCloudCover, CandlestickPatternEveningStar,
-		},
-	}
+// WithPatternsBullish enables only bullish patterns.
+func (c *CandlestickPatternConfig) WithPatternsBullish() *CandlestickPatternConfig {
+	c.addPatterns(
+		candlestickPatternHammer, candlestickPatternInvertedHammer, candlestickPatternDragonfly,
+		candlestickPatternMarubozuBull, candlestickPatternEngulfingBull, candlestickPatternPiercingLine,
+		candlestickPatternMorningStar,
+	)
+	return c
 }
 
-// PatternsReversal enables patterns that signal potential trend reversals.
-func PatternsReversal() *CandlestickPatternConfig {
-	return &CandlestickPatternConfig{
-		PreferPatternLabels: true,
-		EnabledPatterns: []string{
-			// Single candle reversals
-			CandlestickPatternHammer, CandlestickPatternShootingStar,
-			CandlestickPatternDragonfly, CandlestickPatternGravestone,
-			// Two candle reversals
-			CandlestickPatternEngulfingBull, CandlestickPatternEngulfingBear,
-			CandlestickPatternPiercingLine, CandlestickPatternDarkCloudCover,
-			// Three candle reversals
-			CandlestickPatternMorningStar, CandlestickPatternEveningStar,
-		},
-	}
+// WithPatternsBearish enables only bearish patterns.
+func (c *CandlestickPatternConfig) WithPatternsBearish() *CandlestickPatternConfig {
+	c.addPatterns(
+		candlestickPatternShootingStar, candlestickPatternGravestone, candlestickPatternMarubozuBear,
+		candlestickPatternEngulfingBear, candlestickPatternDarkCloudCover, candlestickPatternEveningStar,
+	)
+	return c
 }
 
-// PatternsTrend enables patterns that signal trend continuation.
-func PatternsTrend() *CandlestickPatternConfig {
-	return &CandlestickPatternConfig{
-		PreferPatternLabels: true,
-		EnabledPatterns: []string{
-			// Strong directional patterns
-			CandlestickPatternMarubozuBull, CandlestickPatternMarubozuBear,
-		},
-	}
+// WithPatternsReversal enables only reversal patterns.
+func (c *CandlestickPatternConfig) WithPatternsReversal() *CandlestickPatternConfig {
+	c.addPatterns(
+		// Single candle reversals
+		candlestickPatternHammer, candlestickPatternShootingStar,
+		candlestickPatternDragonfly, candlestickPatternGravestone,
+		// Two candle reversals
+		candlestickPatternEngulfingBull, candlestickPatternEngulfingBear,
+		candlestickPatternPiercingLine, candlestickPatternDarkCloudCover,
+		// Three candle reversals
+		candlestickPatternMorningStar, candlestickPatternEveningStar,
+	)
+	return c
+}
+
+// WithPatternsTrend enables only trend continuation patterns.
+func (c *CandlestickPatternConfig) WithPatternsTrend() *CandlestickPatternConfig {
+	c.addPatterns(
+		candlestickPatternMarubozuBull, candlestickPatternMarubozuBear,
+	)
+	return c
+}
+
+// WithDoji adds the doji pattern.
+func (c *CandlestickPatternConfig) WithDoji() *CandlestickPatternConfig {
+	c.addPattern(candlestickPatternDoji)
+	return c
+}
+
+// WithHammer adds the hammer pattern.
+func (c *CandlestickPatternConfig) WithHammer() *CandlestickPatternConfig {
+	c.addPattern(candlestickPatternHammer)
+	return c
+}
+
+// WithInvertedHammer adds the inverted hammer pattern.
+func (c *CandlestickPatternConfig) WithInvertedHammer() *CandlestickPatternConfig {
+	c.addPattern(candlestickPatternInvertedHammer)
+	return c
+}
+
+// WithShootingStar adds the shooting star pattern.
+func (c *CandlestickPatternConfig) WithShootingStar() *CandlestickPatternConfig {
+	c.addPattern(candlestickPatternShootingStar)
+	return c
+}
+
+// WithGravestone adds the gravestone doji pattern.
+func (c *CandlestickPatternConfig) WithGravestone() *CandlestickPatternConfig {
+	c.addPattern(candlestickPatternGravestone)
+	return c
+}
+
+// WithDragonfly adds the dragonfly doji pattern.
+func (c *CandlestickPatternConfig) WithDragonfly() *CandlestickPatternConfig {
+	c.addPattern(candlestickPatternDragonfly)
+	return c
+}
+
+// WithMarubozuBull adds the bullish marubozu pattern.
+func (c *CandlestickPatternConfig) WithMarubozuBull() *CandlestickPatternConfig {
+	c.addPattern(candlestickPatternMarubozuBull)
+	return c
+}
+
+// WithMarubozuBear adds the bearish marubozu pattern.
+func (c *CandlestickPatternConfig) WithMarubozuBear() *CandlestickPatternConfig {
+	c.addPattern(candlestickPatternMarubozuBear)
+	return c
+}
+
+// WithEngulfingBull adds the bullish engulfing pattern.
+func (c *CandlestickPatternConfig) WithEngulfingBull() *CandlestickPatternConfig {
+	c.addPattern(candlestickPatternEngulfingBull)
+	return c
+}
+
+// WithEngulfingBear adds the bearish engulfing pattern.
+func (c *CandlestickPatternConfig) WithEngulfingBear() *CandlestickPatternConfig {
+	c.addPattern(candlestickPatternEngulfingBear)
+	return c
+}
+
+// WithPiercingLine adds the piercing line pattern.
+func (c *CandlestickPatternConfig) WithPiercingLine() *CandlestickPatternConfig {
+	c.addPattern(candlestickPatternPiercingLine)
+	return c
+}
+
+// WithDarkCloudCover adds the dark cloud cover pattern.
+func (c *CandlestickPatternConfig) WithDarkCloudCover() *CandlestickPatternConfig {
+	c.addPattern(candlestickPatternDarkCloudCover)
+	return c
+}
+
+// WithMorningStar adds the morning star pattern.
+func (c *CandlestickPatternConfig) WithMorningStar() *CandlestickPatternConfig {
+	c.addPattern(candlestickPatternMorningStar)
+	return c
+}
+
+// WithEveningStar adds the evening star pattern.
+func (c *CandlestickPatternConfig) WithEveningStar() *CandlestickPatternConfig {
+	c.addPattern(candlestickPatternEveningStar)
+	return c
+}
+
+// WithPreferPatternLabels sets whether pattern labels have priority over user labels.
+func (c *CandlestickPatternConfig) WithPreferPatternLabels(prefer bool) *CandlestickPatternConfig {
+	c.PreferPatternLabels = prefer
+	return c
+}
+
+// WithPatternFormatter sets a custom pattern formatter.
+func (c *CandlestickPatternConfig) WithPatternFormatter(formatter PatternFormatter) *CandlestickPatternConfig {
+	c.PatternFormatter = formatter
+	return c
+}
+
+// WithDojiThreshold sets the doji threshold (default: 0.05).
+func (c *CandlestickPatternConfig) WithDojiThreshold(threshold float64) *CandlestickPatternConfig {
+	c.DojiThreshold = threshold
+	return c
+}
+
+// WithShadowTolerance sets the shadow tolerance (default: 0.01).
+func (c *CandlestickPatternConfig) WithShadowTolerance(tolerance float64) *CandlestickPatternConfig {
+	c.ShadowTolerance = tolerance
+	return c
+}
+
+// WithShadowRatio sets the shadow ratio (default: 2.0).
+func (c *CandlestickPatternConfig) WithShadowRatio(ratio float64) *CandlestickPatternConfig {
+	c.ShadowRatio = ratio
+	return c
+}
+
+// WithEngulfingMinSize sets the engulfing minimum size (default: 1.0).
+func (c *CandlestickPatternConfig) WithEngulfingMinSize(size float64) *CandlestickPatternConfig {
+	c.EngulfingMinSize = size
+	return c
 }
 
 // scanForCandlestickPatterns scans entire series upfront for configured patterns (private)
@@ -724,22 +851,22 @@ type patternDetector struct {
 // patternDetectors contains all available pattern detectors organized by type
 var patternDetectors = map[string]patternDetector{
 	// single candle patterns
-	CandlestickPatternDoji:           {"Doji", detectDojiAt, 1},
-	CandlestickPatternHammer:         {"Hammer", detectHammerAt, 1},
-	CandlestickPatternInvertedHammer: {"Inverted Hammer", detectInvertedHammerAt, 1},
-	CandlestickPatternShootingStar:   {"Shooting Star", detectShootingStarAt, 1},
-	CandlestickPatternGravestone:     {"Gravestone Doji", detectGravestoneDojiAt, 1},
-	CandlestickPatternDragonfly:      {"Dragonfly Doji", detectDragonflyDojiAt, 1},
-	CandlestickPatternMarubozuBull:   {"Bullish Marubozu", detectBullishMarubozuAt, 1},
-	CandlestickPatternMarubozuBear:   {"Bearish Marubozu", detectBearishMarubozuAt, 1},
+	candlestickPatternDoji:           {"Doji", detectDojiAt, 1},
+	candlestickPatternHammer:         {"Hammer", detectHammerAt, 1},
+	candlestickPatternInvertedHammer: {"Inverted Hammer", detectInvertedHammerAt, 1},
+	candlestickPatternShootingStar:   {"Shooting Star", detectShootingStarAt, 1},
+	candlestickPatternGravestone:     {"Gravestone Doji", detectGravestoneDojiAt, 1},
+	candlestickPatternDragonfly:      {"Dragonfly Doji", detectDragonflyDojiAt, 1},
+	candlestickPatternMarubozuBull:   {"Bullish Marubozu", detectBullishMarubozuAt, 1},
+	candlestickPatternMarubozuBear:   {"Bearish Marubozu", detectBearishMarubozuAt, 1},
 	// double candle patterns
-	CandlestickPatternEngulfingBull:  {"Bullish Engulfing", detectBullishEngulfingAt, 2},
-	CandlestickPatternEngulfingBear:  {"Bearish Engulfing", detectBearishEngulfingAt, 2},
-	CandlestickPatternPiercingLine:   {"Piercing Line", detectPiercingLineAt, 2},
-	CandlestickPatternDarkCloudCover: {"Dark Cloud Cover", detectDarkCloudCoverAt, 2},
+	candlestickPatternEngulfingBull:  {"Bullish Engulfing", detectBullishEngulfingAt, 2},
+	candlestickPatternEngulfingBear:  {"Bearish Engulfing", detectBearishEngulfingAt, 2},
+	candlestickPatternPiercingLine:   {"Piercing Line", detectPiercingLineAt, 2},
+	candlestickPatternDarkCloudCover: {"Dark Cloud Cover", detectDarkCloudCoverAt, 2},
 	// triple candle patterns
-	CandlestickPatternMorningStar: {"Morning Star", detectMorningStarAt, 3},
-	CandlestickPatternEveningStar: {"Evening Star", detectEveningStarAt, 3},
+	candlestickPatternMorningStar: {"Morning Star", detectMorningStarAt, 3},
+	candlestickPatternEveningStar: {"Evening Star", detectEveningStarAt, 3},
 }
 
 // formatPatternsDefault provides default pattern formatting (private)
@@ -760,9 +887,9 @@ func formatPatternsDefault(patterns []PatternDetectionResult, seriesIndex int, t
 
 		// Count pattern types to determine color
 		switch pattern.PatternType {
-		case CandlestickPatternHammer, CandlestickPatternMorningStar, CandlestickPatternEngulfingBull, CandlestickPatternDragonfly, CandlestickPatternMarubozuBull, CandlestickPatternPiercingLine:
+		case candlestickPatternHammer, candlestickPatternMorningStar, candlestickPatternEngulfingBull, candlestickPatternDragonfly, candlestickPatternMarubozuBull, candlestickPatternPiercingLine:
 			bullishCount++
-		case CandlestickPatternShootingStar, CandlestickPatternEveningStar, CandlestickPatternEngulfingBear, CandlestickPatternGravestone, CandlestickPatternMarubozuBear, CandlestickPatternDarkCloudCover:
+		case candlestickPatternShootingStar, candlestickPatternEveningStar, candlestickPatternEngulfingBear, candlestickPatternGravestone, candlestickPatternMarubozuBear, candlestickPatternDarkCloudCover:
 			bearishCount++
 		default: // Doji and other neutral patterns
 			neutralCount++
@@ -821,58 +948,58 @@ Special: ! " # % & ' ( ) + , - . / : ; < = > ? @ K V [ \ ] _ ` { | } ¡ ¦ § ¨
 // getPatternDisplayName returns the pattern name with appropriate symbol.
 func getPatternDisplayName(patternType string) string {
 	switch patternType {
-	case CandlestickPatternDoji:
+	case candlestickPatternDoji:
 		// Current: ± (plus-minus, balance symbol)
 		// Alternatives: ≈ (approximately equal), ∏ (product)
 		return "± Doji"
-	case CandlestickPatternHammer:
+	case candlestickPatternHammer:
 		// Current: Γ (Greek gamma, hammer shape)
 		// Alternatives: Τ (Greek tau), τ (small tau)
 		return "Γ Hammer"
-	case CandlestickPatternInvertedHammer:
+	case candlestickPatternInvertedHammer:
 		// Current: Ʇ (turned T, upside-down hammer)
 		return "Ʇ Inv. Hammer"
-	case CandlestickPatternShootingStar:
+	case candlestickPatternShootingStar:
 		// Current: ※ (reference mark, star-like)
 		// Alternatives: * (asterisk), ⁎ (low asterisk), ‣ (triangular bullet), • (bullet)
 		return "※ Shooting Star"
-	case CandlestickPatternGravestone:
+	case candlestickPatternGravestone:
 		// Current: † (dagger, cross symbol)
 		// Alternatives: ‡ (double dagger)
 		return "† Gravestone"
-	case CandlestickPatternDragonfly:
+	case candlestickPatternDragonfly:
 		// Current: ψ (small psi, trident-like)
 		// Alternatives: Ψ (capital psi), ‡ (double dagger), ◊ (geometric diamond)
 		return "ψ Dragonfly"
-	case CandlestickPatternMarubozuBull:
+	case candlestickPatternMarubozuBull:
 		// Current: ^ (circumflex, upward direction)
 		// Alternatives: Λ (lambda), Δ (delta)
 		return "^ Bull Marubozu"
-	case CandlestickPatternMarubozuBear:
+	case candlestickPatternMarubozuBear:
 		// Current: v (lowercase v, downward direction)
 		// Alternatives: V (capital v)
 		return "v Bear Marubozu"
-	case CandlestickPatternEngulfingBull:
+	case candlestickPatternEngulfingBull:
 		// Current: Λ (Lambda, upward V shape, engulfing)
 		// Alternatives: Δ (delta), < (less than)
 		return "Λ Bull Engulfing"
-	case CandlestickPatternEngulfingBear:
+	case candlestickPatternEngulfingBear:
 		// Current: V (capital V, downward engulfing)
 		// Alternatives: v (lowercase v), > (greater than)
 		return "V Bear Engulfing"
-	case CandlestickPatternMorningStar:
+	case candlestickPatternMorningStar:
 		// Current: * (asterisk, star symbol)
 		// Alternatives: ※ (reference mark), ⁎ (low asterisk), ‣ (triangular bullet), • (bullet)
 		return "* Morning Star"
-	case CandlestickPatternEveningStar:
+	case candlestickPatternEveningStar:
 		// Current: ⁎ (low asterisk, evening star)
 		// Alternatives: ※ (reference mark), * (asterisk), ‣ (triangular bullet), • (bullet)
 		return "⁎ Evening Star"
-	case CandlestickPatternPiercingLine:
+	case candlestickPatternPiercingLine:
 		// Current: | (vertical bar)
 		// Alternatives: ǀ (dental click), ¦ (broken bar)
 		return "| Piercing Line"
-	case CandlestickPatternDarkCloudCover:
+	case candlestickPatternDarkCloudCover:
 		// Current: Ξ (Xi, horizontal lines like cloud layers)
 		// Alternatives: ≈ (approximately equal), ∞ (infinity), ~ (tilde)
 		return "Ξ Dark Cloud"
