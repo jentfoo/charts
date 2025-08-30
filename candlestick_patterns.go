@@ -62,35 +62,24 @@ type CandlestickPatternConfig struct {
 	// ["doji", "hammer"] = only these patterns
 	EnabledPatterns []string
 
-	// Sensitivity controls how strict pattern detection is when thresholds are not manually set.
-	// "strict" = fewer but more reliable patterns detected
-	// "normal" = balanced detection (default if empty)
-	// "loose" = more patterns detected, potentially more false positives
-	// This affects automatic threshold calculation based on recent volatility (ATR).
-	Sensitivity string
-
 	// DojiThreshold is the body-to-range ratio threshold for doji pattern detection.
-	// If set to 0 or unset, will be automatically calculated based on recent volatility and Sensitivity.
-	// Manual setting: 0.0005-0.002 (0.05%-0.2%) for strict to loose detection.
-	// Automatic: Uses ATR-based calculation adjusted by Sensitivity level.
+	// Default: 0.05 (5% - standard textbook definition)
+	// A candlestick where the body is ≤5% of the total range is considered a doji.
 	DojiThreshold float64
 
 	// ShadowTolerance is the shadow-to-range ratio threshold for patterns requiring minimal shadows.
 	// Used by marubozu patterns to determine acceptable shadow size.
-	// If set to 0 or unset, will be automatically calculated based on volatility.
-	// Manual setting: 0.005-0.03 (0.5%-3%) for strict to loose detection.
+	// Default: 0.01 (1% of range)
 	ShadowTolerance float64
 
 	// ShadowRatio is the minimum shadow-to-body ratio for patterns requiring long shadows.
 	// Used by hammer, shooting star, and similar patterns.
-	// If set to 0 or unset, will be automatically calculated based on Sensitivity.
-	// Manual setting: 2.5-1.5 for strict to loose detection.
+	// Default: 2.0 (shadow must be at least 2x the body - standard textbook definition)
 	ShadowRatio float64
 
 	// EngulfingMinSize is the minimum size ratio for engulfing patterns.
 	// The engulfing candle body must be at least this percentage of the engulfed candle body.
-	// If set to 0 or unset, will be automatically calculated based on Sensitivity.
-	// Manual setting: 0.9-0.6 (90%-60%) for strict to loose detection.
+	// Default: 1.0 (100% - must completely engulf the previous body)
 	EngulfingMinSize float64
 }
 
@@ -151,7 +140,6 @@ func (c *CandlestickPatternConfig) MergePatterns(other *CandlestickPatternConfig
 		PreferPatternLabels: c.PreferPatternLabels,
 		EnabledPatterns:     mergedPatterns,
 		PatternFormatter:    c.PatternFormatter,
-		Sensitivity:         c.Sensitivity,
 		DojiThreshold:       dojiThreshold,
 		ShadowTolerance:     shadowTolerance,
 		ShadowRatio:         shadowRatio,
@@ -277,98 +265,16 @@ func scanForCandlestickPatterns(data []OHLCData, config CandlestickPatternConfig
 	return patternMap
 }
 
-// calculateATR calculates the Average True Range for volatility measurement.
-// Period is typically 14 days. ATR does not require volume data.
-func calculateATR(data []OHLCData, endIndex int, period int) float64 {
-	if endIndex < 1 || period <= 0 {
-		return 0
-	}
-
-	// Adjust period if not enough data
-	if endIndex < period {
-		period = endIndex
-	}
-
-	startIndex := endIndex - period + 1
-	if startIndex < 1 {
-		startIndex = 1 // Need at least 1 previous candle for true range
-	}
-
-	var sumTR float64
-	var count int
-	for i := startIndex; i <= endIndex; i++ {
-		current := data[i]
-		prev := data[i-1]
-
-		if !validateOHLCData(current) || !validateOHLCData(prev) {
-			continue
-		}
-
-		// True Range = max of:
-		// 1. Current High - Current Low
-		// 2. |Current High - Previous Close|
-		// 3. |Current Low - Previous Close|
-		hl := current.High - current.Low
-		hc := math.Abs(current.High - prev.Close)
-		lc := math.Abs(current.Low - prev.Close)
-
-		tr := math.Max(hl, math.Max(hc, lc))
-		sumTR += tr
-		count++
-	}
-
-	if count == 0 {
-		return 0
-	}
-
-	return sumTR / float64(count)
-}
-
-// applySensitivity adjusts a threshold based on the sensitivity setting.
-func applySensitivity(baseValue float64, sensitivity string, isInverse bool) float64 {
-	var multiplier float64
-
-	switch sensitivity {
-	case "strict":
-		if isInverse {
-			multiplier = 1.5 // Stricter = higher threshold for things like shadow ratio
-		} else {
-			multiplier = 0.6 // Stricter = lower threshold for things like doji
-		}
-	case "loose":
-		if isInverse {
-			multiplier = 0.7 // Looser = lower threshold for things like shadow ratio
-		} else {
-			multiplier = 1.5 // Looser = higher threshold for things like doji
-		}
-	default: // "normal" or empty
-		multiplier = 1.0
-	}
-
-	return baseValue * multiplier
-}
-
 func detectDojiAt(data []OHLCData, index int, options CandlestickPatternConfig) bool {
 	ohlc := data[index]
 	if !validateOHLCData(ohlc) {
 		return false
 	}
 
-	var threshold float64
-	if options.DojiThreshold > 0 {
-		threshold = options.DojiThreshold
-	} else { // Use ATR-based dynamic threshold
-		atr := calculateATR(data, index, 14)
-		avgPrice := (ohlc.High + ohlc.Low + ohlc.Close) / 3
-
-		if avgPrice > 0 && atr > 0 {
-			// Base threshold on volatility relative to price
-			baseThreshold := (atr / avgPrice) * 0.1 // 10% of ATR relative to price
-			threshold = applySensitivity(baseThreshold, options.Sensitivity, false)
-		} else {
-			// Fallback to static default
-			threshold = applySensitivity(0.001, options.Sensitivity, false)
-		}
+	// Use configured threshold or default to standard 5% (0.05)
+	threshold := options.DojiThreshold
+	if threshold <= 0 {
+		threshold = 0.05 // Standard textbook definition: body ≤5% of range
 	}
 
 	bodySize := math.Abs(ohlc.Close - ohlc.Open)
@@ -385,11 +291,10 @@ func detectHammerAt(data []OHLCData, index int, options CandlestickPatternConfig
 		return false
 	}
 
-	var shadowRatio float64
-	if options.ShadowRatio > 0 {
-		shadowRatio = options.ShadowRatio
-	} else { // Use sensitivity-based threshold
-		shadowRatio = applySensitivity(2.0, options.Sensitivity, true)
+	// Use configured ratio or default to standard 2:1
+	shadowRatio := options.ShadowRatio
+	if shadowRatio <= 0 {
+		shadowRatio = 2.0 // Standard: shadow at least 2x the body
 	}
 
 	bodySize := math.Abs(ohlc.Close - ohlc.Open)
@@ -406,11 +311,10 @@ func detectInvertedHammerAt(data []OHLCData, index int, options CandlestickPatte
 		return false
 	}
 
-	var shadowRatio float64
-	if options.ShadowRatio > 0 {
-		shadowRatio = options.ShadowRatio
-	} else { // Use sensitivity-based threshold
-		shadowRatio = applySensitivity(2.0, options.Sensitivity, true)
+	// Use configured ratio or default to standard 2:1
+	shadowRatio := options.ShadowRatio
+	if shadowRatio <= 0 {
+		shadowRatio = 2.0 // Standard: shadow at least 2x the body
 	}
 
 	bodySize := math.Abs(ohlc.Close - ohlc.Open)
@@ -427,11 +331,10 @@ func detectShootingStarAt(data []OHLCData, index int, options CandlestickPattern
 		return false
 	}
 
-	var shadowRatio float64
-	if options.ShadowRatio > 0 {
-		shadowRatio = options.ShadowRatio
-	} else { // Use sensitivity-based threshold
-		shadowRatio = applySensitivity(2.0, options.Sensitivity, true)
+	// Use configured ratio or default to standard 2:1
+	shadowRatio := options.ShadowRatio
+	if shadowRatio <= 0 {
+		shadowRatio = 2.0 // Standard: shadow at least 2x the body
 	}
 
 	bodySize := math.Abs(ohlc.Close - ohlc.Open)
@@ -459,20 +362,10 @@ func detectGravestoneDojiAt(data []OHLCData, index int, options CandlestickPatte
 		return false
 	}
 
-	// Must be a doji first - apply dynamic threshold
-	var threshold float64
-	if options.DojiThreshold > 0 {
-		threshold = options.DojiThreshold
-	} else {
-		atr := calculateATR(data, index, 14)
-		avgPrice := (ohlc.High + ohlc.Low + ohlc.Close) / 3
-
-		if avgPrice > 0 && atr > 0 {
-			baseThreshold := (atr / avgPrice) * 0.1
-			threshold = applySensitivity(baseThreshold, options.Sensitivity, false)
-		} else {
-			threshold = applySensitivity(0.001, options.Sensitivity, false)
-		}
+	// Must be a doji first
+	threshold := options.DojiThreshold
+	if threshold <= 0 {
+		threshold = 0.05 // Standard: body ≤5% of range
 	}
 
 	bodySize := math.Abs(ohlc.Close - ohlc.Open)
@@ -488,11 +381,9 @@ func detectGravestoneDojiAt(data []OHLCData, index int, options CandlestickPatte
 	upperShadow := ohlc.High - bodyMidpoint
 	lowerShadow := bodyMidpoint - ohlc.Low
 
-	var shadowRatio float64
-	if options.ShadowRatio > 0 {
-		shadowRatio = options.ShadowRatio
-	} else {
-		shadowRatio = applySensitivity(2.0, options.Sensitivity, true)
+	shadowRatio := options.ShadowRatio
+	if shadowRatio <= 0 {
+		shadowRatio = 2.0 // Standard: shadow at least 2x the body
 	}
 
 	// Gravestone doji: long upper shadow, minimal lower shadow
@@ -508,20 +399,10 @@ func detectDragonflyDojiAt(data []OHLCData, index int, options CandlestickPatter
 		return false
 	}
 
-	// Must be a doji first - apply dynamic threshold
-	var threshold float64
-	if options.DojiThreshold > 0 {
-		threshold = options.DojiThreshold
-	} else {
-		atr := calculateATR(data, index, 14)
-		avgPrice := (ohlc.High + ohlc.Low + ohlc.Close) / 3
-
-		if avgPrice > 0 && atr > 0 {
-			baseThreshold := (atr / avgPrice) * 0.1
-			threshold = applySensitivity(baseThreshold, options.Sensitivity, false)
-		} else {
-			threshold = applySensitivity(0.001, options.Sensitivity, false)
-		}
+	// Must be a doji first
+	threshold := options.DojiThreshold
+	if threshold <= 0 {
+		threshold = 0.05 // Standard: body ≤5% of range
 	}
 
 	bodySize := math.Abs(ohlc.Close - ohlc.Open)
@@ -537,11 +418,9 @@ func detectDragonflyDojiAt(data []OHLCData, index int, options CandlestickPatter
 	upperShadow := ohlc.High - bodyMidpoint
 	lowerShadow := bodyMidpoint - ohlc.Low
 
-	var shadowRatio float64
-	if options.ShadowRatio > 0 {
-		shadowRatio = options.ShadowRatio
-	} else {
-		shadowRatio = applySensitivity(2.0, options.Sensitivity, true)
+	shadowRatio := options.ShadowRatio
+	if shadowRatio <= 0 {
+		shadowRatio = 2.0 // Standard: shadow at least 2x the body
 	}
 
 	// Dragonfly doji: long lower shadow, minimal upper shadow
@@ -557,21 +436,10 @@ func detectBullishMarubozuAt(data []OHLCData, index int, options CandlestickPatt
 		return false
 	}
 
-	var threshold float64
-	if options.ShadowTolerance > 0 {
-		threshold = options.ShadowTolerance
-	} else { // Use ATR-based dynamic threshold for shadow tolerance
-		atr := calculateATR(data, index, 14)
-		priceRange := ohlc.High - ohlc.Low
-
-		if priceRange > 0 && atr > 0 {
-			// Base threshold on volatility
-			baseThreshold := (atr / priceRange) * 0.05 // 5% of ATR relative to candle range
-			threshold = applySensitivity(baseThreshold, options.Sensitivity, false)
-		} else {
-			// Fallback to static default
-			threshold = applySensitivity(0.01, options.Sensitivity, false)
-		}
+	// Use configured tolerance or default to 1% of range
+	threshold := options.ShadowTolerance
+	if threshold <= 0 {
+		threshold = 0.01 // Standard: shadows ≤1% of range
 	}
 
 	// Calculate shadow sizes
@@ -599,21 +467,10 @@ func detectBearishMarubozuAt(data []OHLCData, index int, options CandlestickPatt
 		return false
 	}
 
-	var threshold float64
-	if options.ShadowTolerance > 0 {
-		threshold = options.ShadowTolerance
-	} else { // Use ATR-based dynamic threshold for shadow tolerance
-		atr := calculateATR(data, index, 14)
-		priceRange := ohlc.High - ohlc.Low
-
-		if priceRange > 0 && atr > 0 {
-			// Base threshold on volatility
-			baseThreshold := (atr / priceRange) * 0.05 // 5% of ATR relative to candle range
-			threshold = applySensitivity(baseThreshold, options.Sensitivity, false)
-		} else {
-			// Fallback to static default
-			threshold = applySensitivity(0.01, options.Sensitivity, false)
-		}
+	// Use configured tolerance or default to 1% of range
+	threshold := options.ShadowTolerance
+	if threshold <= 0 {
+		threshold = 0.01 // Standard: shadows ≤1% of range
 	}
 
 	// Calculate shadow sizes
@@ -645,11 +502,10 @@ func detectBullishEngulfingAt(data []OHLCData, index int, options CandlestickPat
 		return false
 	}
 
-	var minSize float64
-	if options.EngulfingMinSize > 0 {
-		minSize = options.EngulfingMinSize
-	} else { // Use sensitivity-based threshold
-		minSize = applySensitivity(0.8, options.Sensitivity, true)
+	// Use configured size or default to complete engulfing (100%)
+	minSize := options.EngulfingMinSize
+	if minSize <= 0 {
+		minSize = 1.0 // Standard: must completely engulf previous body
 	}
 
 	prevBody := math.Abs(prev.Close - prev.Open)
@@ -685,11 +541,10 @@ func detectBearishEngulfingAt(data []OHLCData, index int, options CandlestickPat
 		return false
 	}
 
-	var minSize float64
-	if options.EngulfingMinSize > 0 {
-		minSize = options.EngulfingMinSize
-	} else { // Use sensitivity-based threshold
-		minSize = applySensitivity(0.8, options.Sensitivity, true)
+	// Use configured size or default to complete engulfing (100%)
+	minSize := options.EngulfingMinSize
+	if minSize <= 0 {
+		minSize = 1.0 // Standard: must completely engulf previous body
 	}
 
 	prevBody := math.Abs(prev.Close - prev.Open)
