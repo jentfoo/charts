@@ -107,7 +107,6 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 						charts.CandlestickPatternHammer,
 						charts.CandlestickPatternEngulfingBull,
 					},
-					DojiThreshold: 0.001, ShadowTolerance: 0.01, BodySizeRatio: 0.3, ShadowRatio: 2.0, EngulfingMinSize: 0.8,
 				},
 				Label: charts.SeriesLabel{
 					Show: charts.Ptr(true),
@@ -152,7 +151,6 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 				PatternConfig: &charts.CandlestickPatternConfig{
 					PreferPatternLabels: true,
 					EnabledPatterns:     charts.PatternsAll().EnabledPatterns,
-					DojiThreshold:       0.001, ShadowTolerance: 0.01, BodySizeRatio: 0.3, ShadowRatio: 2.0, EngulfingMinSize: 0.8,
 					PatternFormatter: func(patterns []charts.PatternDetectionResult, seriesName string, value float64) (string, *charts.LabelStyle) {
 						if len(patterns) == 0 {
 							return "", nil

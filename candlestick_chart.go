@@ -163,6 +163,9 @@ func (k *candlestickChart) renderChart(result *defaultRenderResult) (Box, error)
 		return BoxZero, errors.New("no data in any series")
 	}
 	width := seriesPainter.Width()
+	if width <= 0 {
+		return BoxZero, errors.New("invalid painter width")
+	}
 	seriesCount := seriesList.len()
 
 	// Calculate candle width using CandleWidth ratio (default 80%)

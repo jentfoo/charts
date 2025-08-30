@@ -240,7 +240,7 @@ func TestCandlestickChart(t *testing.T) {
 					PatternConfig: &CandlestickPatternConfig{
 						PreferPatternLabels: true,
 						EnabledPatterns:     []string{CandlestickPatternDoji},
-						DojiThreshold:       0.001, ShadowTolerance: 0.01, BodySizeRatio: 0.3, ShadowRatio: 2.0, EngulfingMinSize: 0.8,
+						DojiThreshold:       0.001, ShadowTolerance: 0.01, ShadowRatio: 2.0, EngulfingMinSize: 0.8,
 					},
 				}
 				return CandlestickChartOption{

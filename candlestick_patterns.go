@@ -24,16 +24,6 @@ const (
 	CandlestickPatternMarubozuBull = "marubozu_bull"
 	// CandlestickPatternMarubozuBear represents a bearish marubozu with no shadows and closing at the low, showing strong selling pressure.
 	CandlestickPatternMarubozuBear = "marubozu_bear"
-	// CandlestickPatternSpinningTop represents a spinning top with a small body and long shadows, indicating market indecision.
-	CandlestickPatternSpinningTop = "spinning_top"
-	// CandlestickPatternLongLeggedDoji represents a doji with very long upper and lower shadows, showing extreme market indecision.
-	CandlestickPatternLongLeggedDoji = "long_legged_doji"
-	// CandlestickPatternHighWave represents a candle with small body and extremely long shadows, indicating high volatility and indecision.
-	CandlestickPatternHighWave = "high_wave"
-	// CandlestickPatternBeltHoldBull represents a bullish belt hold opening at the low with no lower shadow, showing strong buying interest.
-	CandlestickPatternBeltHoldBull = "belt_hold_bull"
-	// CandlestickPatternBeltHoldBear represents a bearish belt hold opening at the high with no upper shadow, showing strong selling interest.
-	CandlestickPatternBeltHoldBear = "belt_hold_bear"
 
 	/** Two candle patterns **/
 
@@ -41,10 +31,6 @@ const (
 	CandlestickPatternEngulfingBull = "engulfing_bull"
 	// CandlestickPatternEngulfingBear represents a bearish engulfing pattern where a large bearish candle engulfs the previous bullish candle.
 	CandlestickPatternEngulfingBear = "engulfing_bear"
-	// CandlestickPatternHaramiBull represents a bullish harami where a small bullish candle is contained within the previous large bearish candle.
-	CandlestickPatternHaramiBull = "harami_bull"
-	// CandlestickPatternHaramiBear represents a bearish harami where a small bearish candle is contained within the previous large bullish candle.
-	CandlestickPatternHaramiBear = "harami_bear"
 	// CandlestickPatternPiercingLine represents a piercing line where a bullish candle closes above the midpoint of the previous bearish candle.
 	CandlestickPatternPiercingLine = "piercing_line"
 	// CandlestickPatternDarkCloudCover represents a dark cloud cover where a bearish candle closes below the midpoint of the previous bullish candle.
@@ -62,6 +48,7 @@ const (
 type PatternFormatter func(patterns []PatternDetectionResult, seriesName string, value float64) (string, *LabelStyle)
 
 // CandlestickPatternConfig configures automatic pattern detection.
+// EXPERIMENTAL: Pattern detection logic is under active development and may change in future versions.
 type CandlestickPatternConfig struct {
 	// PreferPatternLabels controls pattern/user label precedence
 	// true = pattern labels have priority over user labels, false = user labels have priority over pattern labels
@@ -75,32 +62,35 @@ type CandlestickPatternConfig struct {
 	// ["doji", "hammer"] = only these patterns
 	EnabledPatterns []string
 
+	// Sensitivity controls how strict pattern detection is when thresholds are not manually set.
+	// "strict" = fewer but more reliable patterns detected
+	// "normal" = balanced detection (default if empty)
+	// "loose" = more patterns detected, potentially more false positives
+	// This affects automatic threshold calculation based on recent volatility (ATR).
+	Sensitivity string
+
 	// DojiThreshold is the body-to-range ratio threshold for doji pattern detection.
-	// Smaller values make doji detection more strict. Typical range: 0.0005-0.002 (0.05%-0.2%).
-	// Default: 0.001 (0.1%).
+	// If set to 0 or unset, will be automatically calculated based on recent volatility and Sensitivity.
+	// Manual setting: 0.0005-0.002 (0.05%-0.2%) for strict to loose detection.
+	// Automatic: Uses ATR-based calculation adjusted by Sensitivity level.
 	DojiThreshold float64
 
 	// ShadowTolerance is the shadow-to-range ratio threshold for patterns requiring minimal shadows.
-	// Used by marubozu and belt-hold patterns to determine acceptable shadow size.
-	// Smaller values require cleaner candles. Typical range: 0.005-0.03 (0.5%-3%).
-	// Default: 0.01 (1%).
+	// Used by marubozu patterns to determine acceptable shadow size.
+	// If set to 0 or unset, will be automatically calculated based on volatility.
+	// Manual setting: 0.005-0.03 (0.5%-3%) for strict to loose detection.
 	ShadowTolerance float64
 
-	// BodySizeRatio is the body-to-range ratio threshold for patterns with small bodies.
-	// Used by spinning tops to determine maximum acceptable body size relative to total range.
-	// Smaller values require smaller bodies. Typical range: 0.2-0.4 (20%-40%).
-	// Default: 0.3 (30%).
-	BodySizeRatio float64
-
 	// ShadowRatio is the minimum shadow-to-body ratio for patterns requiring long shadows.
-	// Used by hammer, shooting star, and similar patterns. Higher values require longer shadows.
-	// Typical range: 1.5-4.0. Default: 2.0 (shadow must be at least 2x body size).
+	// Used by hammer, shooting star, and similar patterns.
+	// If set to 0 or unset, will be automatically calculated based on Sensitivity.
+	// Manual setting: 2.5-1.5 for strict to loose detection.
 	ShadowRatio float64
 
 	// EngulfingMinSize is the minimum size ratio for engulfing patterns.
 	// The engulfing candle body must be at least this percentage of the engulfed candle body.
-	// Higher values require more complete engulfment. Typical range: 0.6-0.9 (60%-90%).
-	// Default: 0.8 (80%).
+	// If set to 0 or unset, will be automatically calculated based on Sensitivity.
+	// Manual setting: 0.9-0.6 (90%-60%) for strict to loose detection.
 	EngulfingMinSize float64
 }
 
@@ -148,10 +138,6 @@ func (c *CandlestickPatternConfig) MergePatterns(other *CandlestickPatternConfig
 	if shadowTolerance <= 0 {
 		shadowTolerance = other.ShadowTolerance
 	}
-	bodySizeRatio := c.BodySizeRatio
-	if bodySizeRatio <= 0 {
-		bodySizeRatio = other.BodySizeRatio
-	}
 	shadowRatio := c.ShadowRatio
 	if shadowRatio <= 0 {
 		shadowRatio = other.ShadowRatio
@@ -165,9 +151,9 @@ func (c *CandlestickPatternConfig) MergePatterns(other *CandlestickPatternConfig
 		PreferPatternLabels: c.PreferPatternLabels,
 		EnabledPatterns:     mergedPatterns,
 		PatternFormatter:    c.PatternFormatter,
+		Sensitivity:         c.Sensitivity,
 		DojiThreshold:       dojiThreshold,
 		ShadowTolerance:     shadowTolerance,
-		BodySizeRatio:       bodySizeRatio,
 		ShadowRatio:         shadowRatio,
 		EngulfingMinSize:    engulfingMinSize,
 	}
@@ -181,6 +167,87 @@ type PatternDetectionResult struct {
 	PatternName string
 	// PatternType is the identifier constant (e.g., CandlestickPatternDoji).
 	PatternType string
+}
+
+// PatternsAll enables all standard patterns.
+func PatternsAll() *CandlestickPatternConfig {
+	return &CandlestickPatternConfig{
+		PreferPatternLabels: true,
+		EnabledPatterns: []string{
+			// Strong reversal patterns (highest priority)
+			CandlestickPatternEngulfingBull, CandlestickPatternEngulfingBear, CandlestickPatternHammer,
+			CandlestickPatternMorningStar, CandlestickPatternEveningStar, CandlestickPatternShootingStar,
+			// Moderate patterns
+			CandlestickPatternDarkCloudCover, CandlestickPatternDragonfly, CandlestickPatternGravestone,
+			CandlestickPatternMarubozuBear, CandlestickPatternMarubozuBull, CandlestickPatternPiercingLine,
+			// Neutral/indecision patterns
+			CandlestickPatternDoji, CandlestickPatternInvertedHammer,
+		},
+	}
+}
+
+// PatternsCore enables only the most reliable patterns that work well without volume.
+func PatternsCore() *CandlestickPatternConfig {
+	return &CandlestickPatternConfig{
+		PreferPatternLabels: true,
+		EnabledPatterns: []string{
+			// Most reliable without volume (6-8 patterns)
+			CandlestickPatternEngulfingBull, CandlestickPatternEngulfingBear, // Strong reversal, clear visual
+			CandlestickPatternHammer, CandlestickPatternShootingStar, // Single bar reversal, location matters
+			CandlestickPatternMorningStar, CandlestickPatternEveningStar, // Multi-candle reversal confirmation
+		},
+	}
+}
+
+// PatternsBullish enables only bullish patterns.
+func PatternsBullish() *CandlestickPatternConfig {
+	return &CandlestickPatternConfig{
+		PreferPatternLabels: true,
+		EnabledPatterns: []string{
+			CandlestickPatternHammer, CandlestickPatternInvertedHammer, CandlestickPatternDragonfly,
+			CandlestickPatternMarubozuBull, CandlestickPatternEngulfingBull, CandlestickPatternPiercingLine,
+			CandlestickPatternMorningStar,
+		},
+	}
+}
+
+// PatternsBearish enables only bearish patterns.
+func PatternsBearish() *CandlestickPatternConfig {
+	return &CandlestickPatternConfig{
+		PreferPatternLabels: true,
+		EnabledPatterns: []string{
+			CandlestickPatternShootingStar, CandlestickPatternGravestone, CandlestickPatternMarubozuBear,
+			CandlestickPatternEngulfingBear, CandlestickPatternDarkCloudCover, CandlestickPatternEveningStar,
+		},
+	}
+}
+
+// PatternsReversal enables patterns that signal potential trend reversals.
+func PatternsReversal() *CandlestickPatternConfig {
+	return &CandlestickPatternConfig{
+		PreferPatternLabels: true,
+		EnabledPatterns: []string{
+			// Single candle reversals
+			CandlestickPatternHammer, CandlestickPatternShootingStar,
+			CandlestickPatternDragonfly, CandlestickPatternGravestone,
+			// Two candle reversals
+			CandlestickPatternEngulfingBull, CandlestickPatternEngulfingBear,
+			CandlestickPatternPiercingLine, CandlestickPatternDarkCloudCover,
+			// Three candle reversals
+			CandlestickPatternMorningStar, CandlestickPatternEveningStar,
+		},
+	}
+}
+
+// PatternsTrend enables patterns that signal trend continuation.
+func PatternsTrend() *CandlestickPatternConfig {
+	return &CandlestickPatternConfig{
+		PreferPatternLabels: true,
+		EnabledPatterns: []string{
+			// Strong directional patterns
+			CandlestickPatternMarubozuBull, CandlestickPatternMarubozuBear,
+		},
+	}
 }
 
 // scanForCandlestickPatterns scans entire series upfront for configured patterns (private)
@@ -210,15 +277,100 @@ func scanForCandlestickPatterns(data []OHLCData, config CandlestickPatternConfig
 	return patternMap
 }
 
+// calculateATR calculates the Average True Range for volatility measurement.
+// Period is typically 14 days. ATR does not require volume data.
+func calculateATR(data []OHLCData, endIndex int, period int) float64 {
+	if endIndex < 1 || period <= 0 {
+		return 0
+	}
+
+	// Adjust period if not enough data
+	if endIndex < period {
+		period = endIndex
+	}
+
+	startIndex := endIndex - period + 1
+	if startIndex < 1 {
+		startIndex = 1 // Need at least 1 previous candle for true range
+	}
+
+	var sumTR float64
+	var count int
+	for i := startIndex; i <= endIndex; i++ {
+		current := data[i]
+		prev := data[i-1]
+
+		if !validateOHLCData(current) || !validateOHLCData(prev) {
+			continue
+		}
+
+		// True Range = max of:
+		// 1. Current High - Current Low
+		// 2. |Current High - Previous Close|
+		// 3. |Current Low - Previous Close|
+		hl := current.High - current.Low
+		hc := math.Abs(current.High - prev.Close)
+		lc := math.Abs(current.Low - prev.Close)
+
+		tr := math.Max(hl, math.Max(hc, lc))
+		sumTR += tr
+		count++
+	}
+
+	if count == 0 {
+		return 0
+	}
+
+	return sumTR / float64(count)
+}
+
+// applySensitivity adjusts a threshold based on the sensitivity setting.
+func applySensitivity(baseValue float64, sensitivity string, isInverse bool) float64 {
+	var multiplier float64
+
+	switch sensitivity {
+	case "strict":
+		if isInverse {
+			multiplier = 1.5 // Stricter = higher threshold for things like shadow ratio
+		} else {
+			multiplier = 0.6 // Stricter = lower threshold for things like doji
+		}
+	case "loose":
+		if isInverse {
+			multiplier = 0.7 // Looser = lower threshold for things like shadow ratio
+		} else {
+			multiplier = 1.5 // Looser = higher threshold for things like doji
+		}
+	default: // "normal" or empty
+		multiplier = 1.0
+	}
+
+	return baseValue * multiplier
+}
+
 func detectDojiAt(data []OHLCData, index int, options CandlestickPatternConfig) bool {
 	ohlc := data[index]
 	if !validateOHLCData(ohlc) {
 		return false
 	}
-	threshold := options.DojiThreshold
-	if threshold <= 0 {
-		threshold = 0.001 // 0.1% default
+
+	var threshold float64
+	if options.DojiThreshold > 0 {
+		threshold = options.DojiThreshold
+	} else { // Use ATR-based dynamic threshold
+		atr := calculateATR(data, index, 14)
+		avgPrice := (ohlc.High + ohlc.Low + ohlc.Close) / 3
+
+		if avgPrice > 0 && atr > 0 {
+			// Base threshold on volatility relative to price
+			baseThreshold := (atr / avgPrice) * 0.1 // 10% of ATR relative to price
+			threshold = applySensitivity(baseThreshold, options.Sensitivity, false)
+		} else {
+			// Fallback to static default
+			threshold = applySensitivity(0.001, options.Sensitivity, false)
+		}
 	}
+
 	bodySize := math.Abs(ohlc.Close - ohlc.Open)
 	priceRange := ohlc.High - ohlc.Low
 	if priceRange == 0 {
@@ -232,9 +384,12 @@ func detectHammerAt(data []OHLCData, index int, options CandlestickPatternConfig
 	if !validateOHLCData(ohlc) {
 		return false
 	}
-	shadowRatio := options.ShadowRatio
-	if shadowRatio <= 0 {
-		shadowRatio = 2.0 // default
+
+	var shadowRatio float64
+	if options.ShadowRatio > 0 {
+		shadowRatio = options.ShadowRatio
+	} else { // Use sensitivity-based threshold
+		shadowRatio = applySensitivity(2.0, options.Sensitivity, true)
 	}
 
 	bodySize := math.Abs(ohlc.Close - ohlc.Open)
@@ -250,9 +405,12 @@ func detectInvertedHammerAt(data []OHLCData, index int, options CandlestickPatte
 	if !validateOHLCData(ohlc) {
 		return false
 	}
-	shadowRatio := options.ShadowRatio
-	if shadowRatio <= 0 {
-		shadowRatio = 2.0
+
+	var shadowRatio float64
+	if options.ShadowRatio > 0 {
+		shadowRatio = options.ShadowRatio
+	} else { // Use sensitivity-based threshold
+		shadowRatio = applySensitivity(2.0, options.Sensitivity, true)
 	}
 
 	bodySize := math.Abs(ohlc.Close - ohlc.Open)
@@ -268,9 +426,12 @@ func detectShootingStarAt(data []OHLCData, index int, options CandlestickPattern
 	if !validateOHLCData(ohlc) {
 		return false
 	}
-	shadowRatio := options.ShadowRatio
-	if shadowRatio <= 0 {
-		shadowRatio = 2.0 // default
+
+	var shadowRatio float64
+	if options.ShadowRatio > 0 {
+		shadowRatio = options.ShadowRatio
+	} else { // Use sensitivity-based threshold
+		shadowRatio = applySensitivity(2.0, options.Sensitivity, true)
 	}
 
 	bodySize := math.Abs(ohlc.Close - ohlc.Open)
@@ -298,11 +459,22 @@ func detectGravestoneDojiAt(data []OHLCData, index int, options CandlestickPatte
 		return false
 	}
 
-	// Must be a doji first
-	threshold := options.DojiThreshold
-	if threshold <= 0 {
-		threshold = 0.001 // 0.1% default
+	// Must be a doji first - apply dynamic threshold
+	var threshold float64
+	if options.DojiThreshold > 0 {
+		threshold = options.DojiThreshold
+	} else {
+		atr := calculateATR(data, index, 14)
+		avgPrice := (ohlc.High + ohlc.Low + ohlc.Close) / 3
+
+		if avgPrice > 0 && atr > 0 {
+			baseThreshold := (atr / avgPrice) * 0.1
+			threshold = applySensitivity(baseThreshold, options.Sensitivity, false)
+		} else {
+			threshold = applySensitivity(0.001, options.Sensitivity, false)
+		}
 	}
+
 	bodySize := math.Abs(ohlc.Close - ohlc.Open)
 	priceRange := ohlc.High - ohlc.Low
 	if priceRange == 0 {
@@ -316,9 +488,11 @@ func detectGravestoneDojiAt(data []OHLCData, index int, options CandlestickPatte
 	upperShadow := ohlc.High - bodyMidpoint
 	lowerShadow := bodyMidpoint - ohlc.Low
 
-	shadowRatio := options.ShadowRatio
-	if shadowRatio <= 0 {
-		shadowRatio = 2.0
+	var shadowRatio float64
+	if options.ShadowRatio > 0 {
+		shadowRatio = options.ShadowRatio
+	} else {
+		shadowRatio = applySensitivity(2.0, options.Sensitivity, true)
 	}
 
 	// Gravestone doji: long upper shadow, minimal lower shadow
@@ -334,11 +508,22 @@ func detectDragonflyDojiAt(data []OHLCData, index int, options CandlestickPatter
 		return false
 	}
 
-	// Must be a doji first
-	threshold := options.DojiThreshold
-	if threshold <= 0 {
-		threshold = 0.001 // 0.1% default
+	// Must be a doji first - apply dynamic threshold
+	var threshold float64
+	if options.DojiThreshold > 0 {
+		threshold = options.DojiThreshold
+	} else {
+		atr := calculateATR(data, index, 14)
+		avgPrice := (ohlc.High + ohlc.Low + ohlc.Close) / 3
+
+		if avgPrice > 0 && atr > 0 {
+			baseThreshold := (atr / avgPrice) * 0.1
+			threshold = applySensitivity(baseThreshold, options.Sensitivity, false)
+		} else {
+			threshold = applySensitivity(0.001, options.Sensitivity, false)
+		}
 	}
+
 	bodySize := math.Abs(ohlc.Close - ohlc.Open)
 	priceRange := ohlc.High - ohlc.Low
 	if priceRange == 0 {
@@ -352,9 +537,11 @@ func detectDragonflyDojiAt(data []OHLCData, index int, options CandlestickPatter
 	upperShadow := ohlc.High - bodyMidpoint
 	lowerShadow := bodyMidpoint - ohlc.Low
 
-	shadowRatio := options.ShadowRatio
-	if shadowRatio <= 0 {
-		shadowRatio = 2.0
+	var shadowRatio float64
+	if options.ShadowRatio > 0 {
+		shadowRatio = options.ShadowRatio
+	} else {
+		shadowRatio = applySensitivity(2.0, options.Sensitivity, true)
 	}
 
 	// Dragonfly doji: long lower shadow, minimal upper shadow
@@ -369,9 +556,22 @@ func detectBullishMarubozuAt(data []OHLCData, index int, options CandlestickPatt
 	if !validateOHLCData(ohlc) {
 		return false
 	}
-	threshold := options.ShadowTolerance
-	if threshold <= 0 {
-		threshold = 0.01 // 1% default tolerance
+
+	var threshold float64
+	if options.ShadowTolerance > 0 {
+		threshold = options.ShadowTolerance
+	} else { // Use ATR-based dynamic threshold for shadow tolerance
+		atr := calculateATR(data, index, 14)
+		priceRange := ohlc.High - ohlc.Low
+
+		if priceRange > 0 && atr > 0 {
+			// Base threshold on volatility
+			baseThreshold := (atr / priceRange) * 0.05 // 5% of ATR relative to candle range
+			threshold = applySensitivity(baseThreshold, options.Sensitivity, false)
+		} else {
+			// Fallback to static default
+			threshold = applySensitivity(0.01, options.Sensitivity, false)
+		}
 	}
 
 	// Calculate shadow sizes
@@ -390,11 +590,7 @@ func detectBullishMarubozuAt(data []OHLCData, index int, options CandlestickPatt
 	if !hasMinimalShadows {
 		return false
 	}
-
-	// Determine bullish
-	bullish := ohlc.Close > ohlc.Open
-
-	return bullish
+	return ohlc.Close > ohlc.Open
 }
 
 func detectBearishMarubozuAt(data []OHLCData, index int, options CandlestickPatternConfig) bool {
@@ -402,9 +598,22 @@ func detectBearishMarubozuAt(data []OHLCData, index int, options CandlestickPatt
 	if !validateOHLCData(ohlc) {
 		return false
 	}
-	threshold := options.ShadowTolerance
-	if threshold <= 0 {
-		threshold = 0.01 // 1% default tolerance
+
+	var threshold float64
+	if options.ShadowTolerance > 0 {
+		threshold = options.ShadowTolerance
+	} else { // Use ATR-based dynamic threshold for shadow tolerance
+		atr := calculateATR(data, index, 14)
+		priceRange := ohlc.High - ohlc.Low
+
+		if priceRange > 0 && atr > 0 {
+			// Base threshold on volatility
+			baseThreshold := (atr / priceRange) * 0.05 // 5% of ATR relative to candle range
+			threshold = applySensitivity(baseThreshold, options.Sensitivity, false)
+		} else {
+			// Fallback to static default
+			threshold = applySensitivity(0.01, options.Sensitivity, false)
+		}
 	}
 
 	// Calculate shadow sizes
@@ -423,176 +632,7 @@ func detectBearishMarubozuAt(data []OHLCData, index int, options CandlestickPatt
 	if !hasMinimalShadows {
 		return false
 	}
-
-	// Determine bearish
-	bearish := ohlc.Close < ohlc.Open
-
-	return bearish
-}
-
-func detectSpinningTopAt(data []OHLCData, index int, options CandlestickPatternConfig) bool {
-	ohlc := data[index]
-	if !validateOHLCData(ohlc) {
-		return false
-	}
-	bodyRatio := options.BodySizeRatio
-	if bodyRatio <= 0 || bodyRatio > 0.5 {
-		bodyRatio = 0.3 // Body should be less than 30% of total range
-	}
-
-	body := math.Abs(ohlc.Close - ohlc.Open)
-	total := ohlc.High - ohlc.Low
-	upper := ohlc.High - math.Max(ohlc.Open, ohlc.Close)
-	lower := math.Min(ohlc.Open, ohlc.Close) - ohlc.Low
-
-	if total == 0 {
-		return false
-	}
-
-	// Small body relative to total range
-	hasSmallBody := (body / total) <= bodyRatio
-	// Both shadows should be at least as long as the body (indicating indecision)
-	// AND the total range should be reasonably large to indicate real indecision
-	hasLongShadows := upper >= body && lower >= body && total > body*3
-
-	return hasSmallBody && hasLongShadows
-}
-
-func detectLongLeggedDojiAt(data []OHLCData, index int, options CandlestickPatternConfig) bool {
-	ohlc := data[index]
-	if !validateOHLCData(ohlc) {
-		return false
-	}
-
-	dojiThreshold := options.DojiThreshold
-	if dojiThreshold <= 0 {
-		dojiThreshold = 0.001
-	}
-	shadowRatio := options.ShadowRatio
-	if shadowRatio <= 0 {
-		shadowRatio = 3.0 // Long-legged doji needs higher ratio for very long shadows
-	}
-
-	// Must be a doji first
-	bodySize := math.Abs(ohlc.Close - ohlc.Open)
-	priceRange := ohlc.High - ohlc.Low
-	if priceRange == 0 || (bodySize/priceRange) > dojiThreshold {
-		return false
-	}
-
-	// Calculate shadows
-	upperShadow := ohlc.High - math.Max(ohlc.Open, ohlc.Close)
-	lowerShadow := math.Min(ohlc.Open, ohlc.Close) - ohlc.Low
-
-	// Both shadows should be long (at least shadowRatio times the body)
-	// Default shadowRatio = 3.0 for long-legged
-	minShadowLength := shadowRatio * bodySize
-
-	// Both shadows must be significant relative to total range
-	shadowsSignificant := upperShadow >= priceRange*0.3 && lowerShadow >= priceRange*0.3
-
-	return upperShadow >= minShadowLength && lowerShadow >= minShadowLength && shadowsSignificant
-}
-
-func detectHighWaveAt(data []OHLCData, index int, options CandlestickPatternConfig) bool {
-	ohlc := data[index]
-	if !validateOHLCData(ohlc) {
-		return false
-	}
-
-	shadowToBodyRatio := options.ShadowRatio
-	if shadowToBodyRatio <= 0 {
-		shadowToBodyRatio = 3.0 // High wave needs higher ratio for detection
-	}
-	bodySize := math.Abs(ohlc.Close - ohlc.Open)
-	upperShadow := ohlc.High - math.Max(ohlc.Open, ohlc.Close)
-	lowerShadow := math.Min(ohlc.Open, ohlc.Close) - ohlc.Low
-	totalShadow := upperShadow + lowerShadow
-	priceRange := ohlc.High - ohlc.Low
-
-	if priceRange == 0 || bodySize == 0 {
-		return false
-	}
-
-	// Default shadowToBodyRatio = 3.0
-	// Total shadows should be at least 3x the body
-	hasLongShadows := totalShadow >= shadowToBodyRatio*bodySize
-
-	// Body should be small relative to total range (but not necessarily a doji)
-	smallBody := bodySize/priceRange <= 0.25
-
-	// Both shadows should be meaningful
-	bothShadowsPresent := upperShadow > bodySize*0.5 && lowerShadow > bodySize*0.5
-
-	return hasLongShadows && smallBody && bothShadowsPresent
-}
-
-func detectBullishBeltHoldAt(data []OHLCData, index int, options CandlestickPatternConfig) bool {
-	ohlc := data[index]
-	if !validateOHLCData(ohlc) {
-		return false
-	}
-
-	threshold := options.ShadowTolerance
-	if threshold <= 0 {
-		threshold = 0.01 // 1% default shadow tolerance
-	}
-	bodySize := math.Abs(ohlc.Close - ohlc.Open)
-	priceRange := ohlc.High - ohlc.Low
-
-	if priceRange == 0 || bodySize == 0 {
-		return false
-	}
-
-	// Body should be at least 60% of the total range
-	if bodySize/priceRange < 0.6 {
-		return false
-	}
-
-	upperShadow := ohlc.High - math.Max(ohlc.Open, ohlc.Close)
-	lowerShadow := math.Min(ohlc.Open, ohlc.Close) - ohlc.Low
-
-	// Bullish Belt Hold: Opens at/near low, closes at/near high
-	// Minimal lower shadow, can have small upper shadow
-	bullish := ohlc.Close > ohlc.Open &&
-		lowerShadow <= priceRange*threshold &&
-		upperShadow <= priceRange*0.2
-
-	return bullish
-}
-
-func detectBearishBeltHoldAt(data []OHLCData, index int, options CandlestickPatternConfig) bool {
-	ohlc := data[index]
-	if !validateOHLCData(ohlc) {
-		return false
-	}
-
-	threshold := options.ShadowTolerance
-	if threshold <= 0 {
-		threshold = 0.01 // 1% default shadow tolerance
-	}
-	bodySize := math.Abs(ohlc.Close - ohlc.Open)
-	priceRange := ohlc.High - ohlc.Low
-
-	if priceRange == 0 || bodySize == 0 {
-		return false
-	}
-
-	// Body should be at least 60% of the total range
-	if bodySize/priceRange < 0.6 {
-		return false
-	}
-
-	upperShadow := ohlc.High - math.Max(ohlc.Open, ohlc.Close)
-	lowerShadow := math.Min(ohlc.Open, ohlc.Close) - ohlc.Low
-
-	// Bearish Belt Hold: Opens at/near high, closes at/near low
-	// Minimal upper shadow, can have small lower shadow
-	bearish := ohlc.Close < ohlc.Open &&
-		upperShadow <= priceRange*threshold &&
-		lowerShadow <= priceRange*0.2
-
-	return bearish
+	return ohlc.Close < ohlc.Open
 }
 
 func detectBullishEngulfingAt(data []OHLCData, index int, options CandlestickPatternConfig) bool {
@@ -604,9 +644,12 @@ func detectBullishEngulfingAt(data []OHLCData, index int, options CandlestickPat
 	if !validateOHLCData(prev) || !validateOHLCData(current) {
 		return false
 	}
-	minSize := options.EngulfingMinSize
-	if minSize <= 0 {
-		minSize = 0.8 // 80% default
+
+	var minSize float64
+	if options.EngulfingMinSize > 0 {
+		minSize = options.EngulfingMinSize
+	} else { // Use sensitivity-based threshold
+		minSize = applySensitivity(0.8, options.Sensitivity, true)
 	}
 
 	prevBody := math.Abs(prev.Close - prev.Open)
@@ -629,9 +672,7 @@ func detectBullishEngulfingAt(data []OHLCData, index int, options CandlestickPat
 	prevBearish := prev.Close < prev.Open
 	currentBullish := current.Close > current.Open
 
-	bullishEngulfing := prevBearish && currentBullish
-
-	return bullishEngulfing
+	return prevBearish && currentBullish
 }
 
 func detectBearishEngulfingAt(data []OHLCData, index int, options CandlestickPatternConfig) bool {
@@ -643,9 +684,12 @@ func detectBearishEngulfingAt(data []OHLCData, index int, options CandlestickPat
 	if !validateOHLCData(prev) || !validateOHLCData(current) {
 		return false
 	}
-	minSize := options.EngulfingMinSize
-	if minSize <= 0 {
-		minSize = 0.8 // 80% default
+
+	var minSize float64
+	if options.EngulfingMinSize > 0 {
+		minSize = options.EngulfingMinSize
+	} else { // Use sensitivity-based threshold
+		minSize = applySensitivity(0.8, options.Sensitivity, true)
 	}
 
 	prevBody := math.Abs(prev.Close - prev.Open)
@@ -665,98 +709,10 @@ func detectBearishEngulfingAt(data []OHLCData, index int, options CandlestickPat
 	}
 
 	// Determine bearish
-	prevBearish := prev.Close < prev.Open
-	currentBullish := current.Close > current.Open
+	prevBullish := prev.Close > prev.Open
+	currentBearish := current.Close < current.Open
 
-	bearishEngulfing := !prevBearish && !currentBullish
-
-	return bearishEngulfing
-}
-
-func detectBullishHaramiAt(data []OHLCData, index int, options CandlestickPatternConfig) bool {
-	if index < 1 {
-		return false
-	}
-	prev := data[index-1]
-	current := data[index]
-	if !validateOHLCData(prev) || !validateOHLCData(current) {
-		return false
-	}
-	minRatio := 1.0 - options.EngulfingMinSize // Inverse of engulfing size for harami containment
-	if minRatio <= 0 || minRatio >= 1 {
-		minRatio = 0.3 // 30% default - current body should be at least 30% smaller
-	}
-
-	prevBody := math.Abs(prev.Close - prev.Open)
-	currentBody := math.Abs(current.Close - current.Open)
-
-	// Current candle body must be significantly smaller than previous
-	if currentBody >= prevBody*minRatio {
-		return false
-	}
-
-	// Current candle must be contained within previous candle's body
-	prevTop := math.Max(prev.Open, prev.Close)
-	prevBottom := math.Min(prev.Open, prev.Close)
-	currentTop := math.Max(current.Open, current.Close)
-	currentBottom := math.Min(current.Open, current.Close)
-
-	isContained := currentTop <= prevTop && currentBottom >= prevBottom
-
-	if !isContained {
-		return false
-	}
-
-	// Determine bullish harami
-	prevBearish := prev.Close < prev.Open
-	currentBullish := current.Close > current.Open
-
-	bullishHarami := prevBearish && currentBullish
-
-	return bullishHarami
-}
-
-func detectBearishHaramiAt(data []OHLCData, index int, options CandlestickPatternConfig) bool {
-	if index < 1 {
-		return false
-	}
-	prev := data[index-1]
-	current := data[index]
-	if !validateOHLCData(prev) || !validateOHLCData(current) {
-		return false
-	}
-	minRatio := 1.0 - options.EngulfingMinSize // Inverse of engulfing size for harami containment
-	if minRatio <= 0 || minRatio >= 1 {
-		minRatio = 0.3 // 30% default - current body should be at least 30% smaller
-	}
-
-	prevBody := math.Abs(prev.Close - prev.Open)
-	currentBody := math.Abs(current.Close - current.Open)
-
-	// Current candle body must be significantly smaller than previous
-	if currentBody >= prevBody*minRatio {
-		return false
-	}
-
-	// Current candle must be contained within previous candle's body
-	prevTop := math.Max(prev.Open, prev.Close)
-	prevBottom := math.Min(prev.Open, prev.Close)
-	currentTop := math.Max(current.Open, current.Close)
-	currentBottom := math.Min(current.Open, current.Close)
-
-	isContained := currentTop <= prevTop && currentBottom >= prevBottom
-
-	if !isContained {
-		return false
-	}
-
-	// Determine bearish harami
-	prevBearish := prev.Close < prev.Open
-	currentBullish := current.Close > current.Open
-
-	bearishHarami := !prevBearish && !currentBullish
-
-	return bearishHarami
+	return prevBullish && currentBearish
 }
 
 func detectPiercingLineAt(data []OHLCData, index int, _ CandlestickPatternConfig) bool {
@@ -921,16 +877,9 @@ var patternDetectors = map[string]patternDetector{
 	CandlestickPatternDragonfly:      {"Dragonfly Doji", detectDragonflyDojiAt, 1},
 	CandlestickPatternMarubozuBull:   {"Bullish Marubozu", detectBullishMarubozuAt, 1},
 	CandlestickPatternMarubozuBear:   {"Bearish Marubozu", detectBearishMarubozuAt, 1},
-	CandlestickPatternSpinningTop:    {"Spinning Top", detectSpinningTopAt, 1},
-	CandlestickPatternLongLeggedDoji: {"Long Legged Doji", detectLongLeggedDojiAt, 1},
-	CandlestickPatternHighWave:       {"High Wave", detectHighWaveAt, 1},
-	CandlestickPatternBeltHoldBull:   {"Bullish Belt Hold", detectBullishBeltHoldAt, 1},
-	CandlestickPatternBeltHoldBear:   {"Bearish Belt Hold", detectBearishBeltHoldAt, 1},
 	// double candle patterns
 	CandlestickPatternEngulfingBull:  {"Bullish Engulfing", detectBullishEngulfingAt, 2},
 	CandlestickPatternEngulfingBear:  {"Bearish Engulfing", detectBearishEngulfingAt, 2},
-	CandlestickPatternHaramiBull:     {"Bullish Harami", detectBullishHaramiAt, 2},
-	CandlestickPatternHaramiBear:     {"Bearish Harami", detectBearishHaramiAt, 2},
 	CandlestickPatternPiercingLine:   {"Piercing Line", detectPiercingLineAt, 2},
 	CandlestickPatternDarkCloudCover: {"Dark Cloud Cover", detectDarkCloudCoverAt, 2},
 	// triple candle patterns
@@ -948,15 +897,19 @@ func formatPatternsDefault(patterns []PatternDetectionResult, seriesIndex int, t
 	displayNames := make([]string, len(patterns))
 	var bullishCount, bearishCount, neutralCount int
 	for i, pattern := range patterns {
-		displayNames[i] = getPatternDisplayName(pattern.PatternName)
+		displayName := getPatternDisplayName(pattern.PatternType)
+		if displayName == "" {
+			displayName = pattern.PatternName // fallback name without icon
+		}
+		displayNames[i] = displayName
 
 		// Count pattern types to determine color
 		switch pattern.PatternType {
-		case CandlestickPatternHammer, CandlestickPatternMorningStar, CandlestickPatternEngulfingBull, CandlestickPatternDragonfly, CandlestickPatternMarubozuBull, CandlestickPatternPiercingLine, CandlestickPatternBeltHoldBull:
+		case CandlestickPatternHammer, CandlestickPatternMorningStar, CandlestickPatternEngulfingBull, CandlestickPatternDragonfly, CandlestickPatternMarubozuBull, CandlestickPatternPiercingLine:
 			bullishCount++
-		case CandlestickPatternShootingStar, CandlestickPatternEveningStar, CandlestickPatternEngulfingBear, CandlestickPatternGravestone, CandlestickPatternMarubozuBear, CandlestickPatternDarkCloudCover, CandlestickPatternBeltHoldBear:
+		case CandlestickPatternShootingStar, CandlestickPatternEveningStar, CandlestickPatternEngulfingBear, CandlestickPatternGravestone, CandlestickPatternMarubozuBear, CandlestickPatternDarkCloudCover:
 			bearishCount++
-		default: // Doji, spinning top, long legged doji, high wave and other neutral patterns
+		default: // Doji and other neutral patterns
 			neutralCount++
 		}
 	}
@@ -1011,191 +964,64 @@ Special: ! " # % & ' ( ) + , - . / : ; < = > ? @ K V [ \ ] _ ` { | } ¡ ¦ § ¨
 */
 
 // getPatternDisplayName returns the pattern name with appropriate symbol.
-func getPatternDisplayName(patternName string) string {
-	switch patternName {
-	case "Doji":
+func getPatternDisplayName(patternType string) string {
+	switch patternType {
+	case CandlestickPatternDoji:
 		// Current: ± (plus-minus, balance symbol)
 		// Alternatives: ≈ (approximately equal), ∏ (product)
 		return "± Doji"
-	case "Hammer":
+	case CandlestickPatternHammer:
 		// Current: Γ (Greek gamma, hammer shape)
 		// Alternatives: Τ (Greek tau), τ (small tau)
 		return "Γ Hammer"
-	case "Inverted Hammer":
+	case CandlestickPatternInvertedHammer:
 		// Current: Ʇ (turned T, upside-down hammer)
 		return "Ʇ Inv. Hammer"
-	case "Shooting Star":
+	case CandlestickPatternShootingStar:
 		// Current: ※ (reference mark, star-like)
 		// Alternatives: * (asterisk), ⁎ (low asterisk), ‣ (triangular bullet), • (bullet)
 		return "※ Shooting Star"
-	case "Gravestone Doji":
+	case CandlestickPatternGravestone:
 		// Current: † (dagger, cross symbol)
 		// Alternatives: ‡ (double dagger)
 		return "† Gravestone"
-	case "Dragonfly Doji":
+	case CandlestickPatternDragonfly:
 		// Current: ψ (small psi, trident-like)
 		// Alternatives: Ψ (capital psi), ‡ (double dagger), ◊ (geometric diamond)
 		return "ψ Dragonfly"
-	case "Bullish Marubozu":
+	case CandlestickPatternMarubozuBull:
 		// Current: ^ (circumflex, upward direction)
 		// Alternatives: Λ (lambda), Δ (delta)
 		return "^ Bull Marubozu"
-	case "Bearish Marubozu":
+	case CandlestickPatternMarubozuBear:
 		// Current: v (lowercase v, downward direction)
 		// Alternatives: V (capital v)
 		return "v Bear Marubozu"
-	case "Spinning Top":
-		// Current: ◌ (dotted circle, spinning motion)
-		// Alternatives: • (bullet)
-		return "◌ Spinning Top"
-	case "Long Legged Doji":
-		// Current: ‡ (double dagger, perfect for doji indecision with long shadows)
-		// Alternatives: ‡ (double dagger), ± (plus-minus), ∏ (product)
-		return "‡ Long Legged Doji"
-	case "High Wave":
-		// Current: ~ (tilde, perfect for extreme volatility)
-		return "~ High Wave"
-	case "Bullish Belt Hold":
-		// Current: [ (left bracket, opens at/near low)
-		return "[ Bull Belt Hold"
-	case "Bearish Belt Hold":
-		// Current: ] (right bracket, opens at/near high)
-		return "] Bear Belt Hold"
-	case "Bullish Engulfing":
+	case CandlestickPatternEngulfingBull:
 		// Current: Λ (Lambda, upward V shape, engulfing)
 		// Alternatives: Δ (delta), < (less than)
 		return "Λ Bull Engulfing"
-	case "Bearish Engulfing":
+	case CandlestickPatternEngulfingBear:
 		// Current: V (capital V, downward engulfing)
 		// Alternatives: v (lowercase v), > (greater than)
 		return "V Bear Engulfing"
-	case "Bullish Harami":
-		// Current: ʘ (bilabial click, circle with dot - containment)
-		// Alternatives: • (bullet), ≈ (approximately equal), ◌ (dotted circle)
-		return "ʘ Bull Harami"
-	case "Bearish Harami":
-		// Current: θ (small theta, circle with horizontal line - containment)
-		// Alternatives: Θ (capital theta), ϴ (capital theta symbol), ◌ (dotted circle)
-		return "θ Bear Harami"
-	case "Morning Star":
+	case CandlestickPatternMorningStar:
 		// Current: * (asterisk, star symbol)
 		// Alternatives: ※ (reference mark), ⁎ (low asterisk), ‣ (triangular bullet), • (bullet)
 		return "* Morning Star"
-	case "Evening Star":
+	case CandlestickPatternEveningStar:
 		// Current: ⁎ (low asterisk, evening star)
 		// Alternatives: ※ (reference mark), * (asterisk), ‣ (triangular bullet), • (bullet)
 		return "⁎ Evening Star"
-	case "Piercing Line":
+	case CandlestickPatternPiercingLine:
 		// Current: | (vertical bar)
 		// Alternatives: ǀ (dental click), ¦ (broken bar)
 		return "| Piercing Line"
-	case "Dark Cloud Cover":
+	case CandlestickPatternDarkCloudCover:
 		// Current: Ξ (Xi, horizontal lines like cloud layers)
 		// Alternatives: ≈ (approximately equal), ∞ (infinity), ~ (tilde)
 		return "Ξ Dark Cloud"
 	default:
-		return patternName
-	}
-}
-
-// =============================================================================
-// PATTERN CONFIGURATION PRESETS
-// =============================================================================
-
-// PatternsAll enables all standard patterns.
-func PatternsAll() *CandlestickPatternConfig {
-	return &CandlestickPatternConfig{
-		PreferPatternLabels: true,
-		EnabledPatterns: []string{
-			// Strong reversal patterns (highest priority)
-			CandlestickPatternEngulfingBull, CandlestickPatternEngulfingBear, CandlestickPatternHammer, CandlestickPatternMorningStar,
-			CandlestickPatternEveningStar, CandlestickPatternShootingStar,
-			// Moderate patterns
-			CandlestickPatternDarkCloudCover, CandlestickPatternDragonfly, CandlestickPatternGravestone, CandlestickPatternMarubozuBear,
-			CandlestickPatternMarubozuBull, CandlestickPatternPiercingLine, CandlestickPatternBeltHoldBull, CandlestickPatternBeltHoldBear,
-			// Neutral/indecision patterns
-			CandlestickPatternDoji, CandlestickPatternHaramiBear, CandlestickPatternHaramiBull, CandlestickPatternInvertedHammer, CandlestickPatternSpinningTop, CandlestickPatternLongLeggedDoji, CandlestickPatternHighWave,
-		},
-	}
-}
-
-// PatternsCore enables only the most reliable patterns that work well without volume.
-func PatternsCore() *CandlestickPatternConfig {
-	return &CandlestickPatternConfig{
-		PreferPatternLabels: true,
-		EnabledPatterns: []string{
-			// Most reliable without volume (6-8 patterns)
-			CandlestickPatternEngulfingBull, CandlestickPatternEngulfingBear, // Strong reversal, clear visual
-			CandlestickPatternHammer, CandlestickPatternShootingStar, // Single bar reversal, location matters
-			CandlestickPatternBeltHoldBull, CandlestickPatternBeltHoldBear, // Strong directional, clear conviction
-			CandlestickPatternMorningStar, CandlestickPatternEveningStar, // Multi-candle reversal confirmation
-		},
-	}
-}
-
-// PatternsBullish enables only bullish patterns.
-func PatternsBullish() *CandlestickPatternConfig {
-	return &CandlestickPatternConfig{
-		PreferPatternLabels: true,
-		EnabledPatterns: []string{
-			CandlestickPatternHammer, CandlestickPatternInvertedHammer, CandlestickPatternDragonfly, CandlestickPatternMarubozuBull,
-			CandlestickPatternEngulfingBull, CandlestickPatternHaramiBull, CandlestickPatternPiercingLine,
-			CandlestickPatternMorningStar, CandlestickPatternBeltHoldBull,
-		},
-	}
-}
-
-// PatternsBearish enables only bearish patterns.
-func PatternsBearish() *CandlestickPatternConfig {
-	return &CandlestickPatternConfig{
-		PreferPatternLabels: true,
-		EnabledPatterns: []string{
-			CandlestickPatternShootingStar, CandlestickPatternGravestone, CandlestickPatternMarubozuBear, CandlestickPatternEngulfingBear,
-			CandlestickPatternHaramiBear, CandlestickPatternDarkCloudCover, CandlestickPatternEveningStar, CandlestickPatternBeltHoldBear,
-		},
-	}
-}
-
-// PatternsReversal enables patterns that signal potential trend reversals.
-func PatternsReversal() *CandlestickPatternConfig {
-	return &CandlestickPatternConfig{
-		PreferPatternLabels: true,
-		EnabledPatterns: []string{
-			// Single candle reversals
-			CandlestickPatternHammer, CandlestickPatternShootingStar,
-			CandlestickPatternDragonfly, CandlestickPatternGravestone,
-			// Two candle reversals
-			CandlestickPatternEngulfingBull, CandlestickPatternEngulfingBear,
-			CandlestickPatternPiercingLine, CandlestickPatternDarkCloudCover,
-			// Three candle reversals
-			CandlestickPatternMorningStar, CandlestickPatternEveningStar,
-		},
-	}
-}
-
-// PatternsIndecision enables patterns that signal market indecision or volatility.
-func PatternsIndecision() *CandlestickPatternConfig {
-	return &CandlestickPatternConfig{
-		PreferPatternLabels: true,
-		EnabledPatterns: []string{
-			CandlestickPatternLongLeggedDoji, // Extreme indecision
-			CandlestickPatternHighWave,       // Extreme volatility
-			CandlestickPatternDoji,           // Basic indecision
-			CandlestickPatternSpinningTop,    // Moderate indecision
-		},
-	}
-}
-
-// PatternsTrend enables patterns that signal trend continuation.
-func PatternsTrend() *CandlestickPatternConfig {
-	return &CandlestickPatternConfig{
-		PreferPatternLabels: true,
-		EnabledPatterns: []string{
-			// Strong directional patterns
-			CandlestickPatternBeltHoldBull, CandlestickPatternBeltHoldBear,
-			CandlestickPatternMarubozuBull, CandlestickPatternMarubozuBear,
-			// Consolidation patterns
-			CandlestickPatternHaramiBull, CandlestickPatternHaramiBear,
-		},
+		return ""
 	}
 }
