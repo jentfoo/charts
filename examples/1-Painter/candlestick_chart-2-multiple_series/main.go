@@ -7,7 +7,6 @@ import (
 )
 
 func main() {
-	// Create sample OHLC data for multiple stocks
 	stockAData := []charts.OHLCData{
 		{Open: 100.0, High: 110.0, Low: 95.0, Close: 105.0},
 		{Open: 105.0, High: 115.0, Low: 100.0, Close: 112.0},
@@ -15,7 +14,6 @@ func main() {
 		{Open: 115.0, High: 120.0, Low: 110.0, Close: 108.0},
 		{Open: 108.0, High: 113.0, Low: 105.0, Close: 109.0},
 	}
-
 	stockBData := []charts.OHLCData{
 		{Open: 150.0, High: 160.0, Low: 145.0, Close: 155.0},
 		{Open: 155.0, High: 165.0, Low: 150.0, Close: 162.0},
@@ -23,7 +21,6 @@ func main() {
 		{Open: 165.0, High: 170.0, Low: 160.0, Close: 158.0},
 		{Open: 158.0, High: 163.0, Low: 155.0, Close: 159.0},
 	}
-
 	stockCData := []charts.OHLCData{
 		{Open: 200.0, High: 210.0, Low: 195.0, Close: 205.0},
 		{Open: 205.0, High: 215.0, Low: 200.0, Close: 212.0},
@@ -39,12 +36,6 @@ func main() {
 			charts.CandlestickSeries{Data: stockAData, Name: "Stock A", CandleStyle: charts.CandleStyleFilled},
 			charts.CandlestickSeries{Data: stockBData, Name: "Stock B", CandleStyle: charts.CandleStyleTraditional},
 			charts.CandlestickSeries{Data: stockCData, Name: "Stock C", CandleStyle: charts.CandleStyleOutline},
-		},
-		Title: charts.TitleOption{
-			Text: "Multiple Candlestick Series Comparison",
-			FontStyle: charts.FontStyle{
-				FontSize: 18,
-			},
 		},
 		XAxis: charts.XAxisOption{
 			Labels: []string{"Day 1", "Day 2", "Day 3", "Day 4", "Day 5"},
@@ -67,18 +58,12 @@ func main() {
 	}
 	p := charts.NewPainter(painterOptions)
 
-	// Render the candlestick chart
+	// Render and save the candlestick chart
 	if err := p.CandlestickChart(opt); err != nil {
 		panic(err)
-	}
-
-	// Save the chart to file
-	buf, err := p.Bytes()
-	if err != nil {
+	} else if buf, err := p.Bytes(); err != nil {
 		panic(err)
-	}
-
-	if err := os.WriteFile("candlestick_multiple_series.png", buf, 0644); err != nil {
+	} else if err := os.WriteFile("candlestick_multiple_series.png", buf, 0644); err != nil {
 		panic(err)
 	}
 }

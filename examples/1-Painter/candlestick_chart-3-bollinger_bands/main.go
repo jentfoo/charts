@@ -7,7 +7,6 @@ import (
 )
 
 func main() {
-	// Create OHLC data with some volatility for Bollinger Bands demonstration
 	ohlcData := []charts.OHLCData{
 		{Open: 100.0, High: 110.0, Low: 95.0, Close: 105.0},
 		{Open: 105.0, High: 115.0, Low: 100.0, Close: 112.0},
@@ -68,18 +67,11 @@ func main() {
 		Height:       600,
 	}, charts.PainterThemeOption(charts.GetDefaultTheme()))
 
-	err := painter.CandlestickChart(chartOpt)
-	if err != nil {
+	if err := painter.CandlestickChart(chartOpt); err != nil {
 		panic(err)
-	}
-
-	// Save the chart to file
-	buf, err := painter.Bytes()
-	if err != nil {
+	} else if buf, err := painter.Bytes(); err != nil {
 		panic(err)
-	}
-
-	if err := os.WriteFile("candlestick_bollinger_bands.png", buf, 0644); err != nil {
+	} else if err := os.WriteFile("candlestick_bollinger_bands.png", buf, 0644); err != nil {
 		panic(err)
 	}
 }

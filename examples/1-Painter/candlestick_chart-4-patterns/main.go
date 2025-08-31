@@ -9,7 +9,6 @@ import (
 
 // patternExample holds configuration for a pattern demonstration
 type patternExample struct {
-	name       string
 	filename   string
 	title      string
 	width      int
@@ -19,7 +18,6 @@ type patternExample struct {
 }
 
 func main() {
-	// Create OHLC data designed to showcase various candlestick patterns
 	ohlcData := []charts.OHLCData{
 		// Normal candle
 		{Open: 100.0, High: 110.0, Low: 95.0, Close: 105.0},
@@ -43,10 +41,8 @@ func main() {
 		{Open: 109.0, High: 118.0, Low: 108.0, Close: 116.0},
 	}
 
-	// Create all pattern configuration examples
+	// Create and render all pattern configuration examples
 	examples := createPatternExamples(ohlcData)
-
-	// Generate all example charts
 	generateExampleCharts(examples, ohlcData)
 }
 
@@ -54,9 +50,8 @@ func main() {
 func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 	return []patternExample{
 		{
-			name:     "Basic All Patterns",
 			filename: "candlestick_patterns.png",
-			title:    "Candlestick Patterns Detection",
+			title:    "Candlestick Patterns",
 			width:    900,
 			height:   650,
 			series: charts.CandlestickSeries{
@@ -64,9 +59,6 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 				Name:          "Stock Price with Patterns",
 				CandleStyle:   charts.CandleStyleFilled,
 				PatternConfig: (&charts.CandlestickPatternConfig{}).WithPatternsAll(),
-				Label: charts.SeriesLabel{
-					Show: charts.Ptr(true),
-				},
 				CloseMarkLine: charts.SeriesMarkLine{
 					Lines: []charts.SeriesMark{
 						{Type: charts.SeriesMarkTypeAverage}, // Resistance level
@@ -77,66 +69,17 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 			showLegend: true,
 		},
 		{
-			name:     "Important Patterns Only",
-			filename: "patterns_important.png",
-			title:    "Important Reversal Patterns",
+			filename: "patterns_core.png",
+			title:    "Core Patterns",
 			width:    800,
 			height:   400,
 			series: charts.CandlestickSeries{
 				Data:          ohlcData,
 				Name:          "Important Patterns",
 				PatternConfig: (&charts.CandlestickPatternConfig{}).WithPatternsCore(),
-				Label: charts.SeriesLabel{
-					Show: charts.Ptr(true),
-				},
 			},
 		},
 		{
-			name:     "Custom Pattern Selection",
-			filename: "patterns_custom.png",
-			title:    "Custom Pattern Selection",
-			width:    800,
-			height:   400,
-			series: charts.CandlestickSeries{
-				Data: ohlcData,
-				Name: "Custom Selection",
-				PatternConfig: (&charts.CandlestickPatternConfig{}).
-					WithDoji().
-					WithHammer().
-					WithEngulfingBull(),
-				Label: charts.SeriesLabel{
-					Show: charts.Ptr(true),
-				},
-			},
-		},
-		{
-			name:     "Patterns Complement User Labels",
-			filename: "patterns_complement.png",
-			title:    "Patterns + Price Labels",
-			width:    800,
-			height:   400,
-			series: charts.CandlestickSeries{
-				Data: ohlcData,
-				Name: "Complement Mode",
-				PatternConfig: func() *charts.CandlestickPatternConfig {
-					return (&charts.CandlestickPatternConfig{}).
-						WithPatternsCore().
-						WithPreferPatternLabels(false) // Complement mode
-				}(),
-				Label: charts.SeriesLabel{
-					Show: charts.Ptr(true),
-					LabelFormatter: func(index int, name string, val float64) (string, *charts.LabelStyle) {
-						// Only label specific candles (every 3rd one)
-						if index%3 == 0 {
-							return fmt.Sprintf("$%.2f", val), nil
-						}
-						return "", nil // No user label - patterns will show
-					},
-				},
-			},
-		},
-		{
-			name:     "Custom Pattern Formatter",
 			filename: "patterns_custom_format.png",
 			title:    "Custom Pattern Formatting",
 			width:    800,
@@ -172,24 +115,17 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 						}
 					},
 				},
-				Label: charts.SeriesLabel{
-					Show: charts.Ptr(true),
-				},
 			},
 		},
 		{
-			name:     "Bullish Patterns Only",
 			filename: "patterns_bullish.png",
-			title:    "Bullish Patterns Only",
+			title:    "Bullish Patterns",
 			width:    800,
 			height:   400,
 			series: charts.CandlestickSeries{
 				Data:          ohlcData,
 				Name:          "Bullish Only",
 				PatternConfig: (&charts.CandlestickPatternConfig{}).WithPatternsBullish(),
-				Label: charts.SeriesLabel{
-					Show: charts.Ptr(true),
-				},
 			},
 		},
 	}
@@ -198,9 +134,6 @@ func createPatternExamples(ohlcData []charts.OHLCData) []patternExample {
 // generateExampleCharts creates and saves all the pattern example charts
 func generateExampleCharts(examples []patternExample, ohlcData []charts.OHLCData) {
 	for _, example := range examples {
-		fmt.Printf("Generating %s (%s)...\n", example.name, example.filename)
-
-		// Create chart option
 		opt := charts.CandlestickChartOption{
 			Title: charts.TitleOption{
 				Text: example.title,
@@ -217,16 +150,8 @@ func generateExampleCharts(examples []patternExample, ohlcData []charts.OHLCData
 			SeriesList: charts.CandlestickSeriesList{example.series},
 			Padding:    charts.NewBoxEqual(20),
 		}
+		opt.Legend.Show = charts.Ptr(example.showLegend)
 
-		// Add legend if requested
-		if example.showLegend {
-			opt.Legend = charts.LegendOption{
-				SeriesNames: []string{example.series.Name},
-				Show:        charts.Ptr(true),
-			}
-		}
-
-		// Create painter
 		painterOptions := charts.PainterOptions{
 			OutputFormat: charts.ChartOutputPNG,
 			Width:        example.width,
@@ -234,21 +159,12 @@ func generateExampleCharts(examples []patternExample, ohlcData []charts.OHLCData
 		}
 		p := charts.NewPainter(painterOptions)
 
-		// Render the candlestick chart
 		if err := p.CandlestickChart(opt); err != nil {
-			panic(fmt.Errorf("failed to render %s: %v", example.name, err))
-		}
-
-		// Save the chart to file
-		buf, err := p.Bytes()
-		if err != nil {
-			panic(fmt.Errorf("failed to get bytes for %s: %v", example.name, err))
-		}
-
-		if err := os.WriteFile(example.filename, buf, 0644); err != nil {
+			panic(fmt.Errorf("failed to render %s: %v", example.title, err))
+		} else if buf, err := p.Bytes(); err != nil {
+			panic(fmt.Errorf("failed to get bytes for %s: %v", example.title, err))
+		} else if err := os.WriteFile(example.filename, buf, 0644); err != nil {
 			panic(fmt.Errorf("failed to write %s: %v", example.filename, err))
 		}
-
-		fmt.Printf("✓ Generated %s\n", example.filename)
 	}
 }
